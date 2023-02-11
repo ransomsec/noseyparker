@@ -13,7 +13,7 @@ use noseyparker::blob::Blob;
 use noseyparker::blob_id_set::BlobIdSet;
 use noseyparker::datastore::Datastore;
 use noseyparker::defaults::DEFAULT_IGNORE_RULES;
-use noseyparker::input_enumerator::{FileResult, FilesystemEnumerator};
+use noseyparker::input_enumerator::{FileResult, FilesystemEnumerator, open_git_repo};
 use noseyparker::location;
 use noseyparker::match_type::Match;
 use noseyparker::matcher::{BlobMatch, Matcher};
@@ -138,6 +138,8 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
         Matcher::new(&rules_db, &seen_blobs, Some(&matcher_stats))
     };
 
+    let snippet_context_bytes: usize = 128; // FIXME:parameterize this and expose to CLI
+
     // a function to convert BlobMatch into regular Match
     let convert_blob_matches =
         |blob: &Blob, matches: Vec<BlobMatch>, provenance: Provenance| -> Vec<Match> {
@@ -152,9 +154,10 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
                     None => return Vec::new(),
                 }
             };
+
             matches
                 .into_iter()
-                .flat_map(|m| Match::new(&loc_mapping, m, &provenance))
+                .flat_map(|m| Match::new(&loc_mapping, m, &provenance, snippet_context_bytes))
                 .collect()
         };
 
@@ -231,10 +234,22 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
     // Scan Git repo inputs
     // ---------------------------------------------------------------------------------------------
     inputs.git_repos.par_iter().for_each(|git_repo_result| {
+        let repository = match open_git_repo(&git_repo_result.path) {
+            Ok(Some(repository)) => repository.into_sync(),
+            Ok(None) => {
+                error!("Failed to re-open previously-found repository at {}", git_repo_result.path.display());
+                return;
+            }
+            Err(err) => {
+                error!("Failed to re-open previously-found repository at {}: {err}", git_repo_result.path.display());
+                return;
+            }
+        };
+
         git_repo_result.blobs.par_iter().for_each_init(
             || {
                 let matcher = make_matcher().expect("should be able to create a matcher");
-                let repo = git_repo_result.repository.to_thread_local();
+                let repo = repository.to_thread_local();
                 (repo, matcher, progress.clone())
             },
             |(repo, matcher, progress), (blob_id, size)| {
@@ -334,7 +349,7 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
 
         if num_matches > 0 {
             let matches_summary = datastore.summarize()?;
-            let matches_table = crate::cmd_summarize::summary_table(matches_summary);
+            let matches_table = crate::cmd_summarize::summary_table(&matches_summary);
             println!();
             matches_table.print_tty(color_enabled)?;
         }

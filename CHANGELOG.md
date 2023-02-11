@@ -8,20 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## Unreleased
 
 ### Additions
+- Nosey Parker now has rudimentary support for enumerating repositories from GitHub users and organizations.
+  The new `github repos list` command uses the GitHub REST API to enumerate repositories belonging to one or more users or organizations.
+  An optional GitHub Personal Access Token can be provided via the `GITHUB_TOKEN` environment variable.
+
 - Nosey Parker now has an optional `rule_profiling` crate feature that causes performance-related statistics to be collected and reported when scanning.
   This feature imposes some performance cost and is only useful to rule authors, and so is disabled by default.
 
-- Several new rules have been added:
+- Many new rules have been added:
 
+  - Adobe OAuth Client Secret
   - Age Identity (X22519 secret key)
   - Age Recipient (X25519 public key)
   - crates.io API Key
   - DigitalOcean Application Access Token
   - DigitalOcean Personal Access Token
   - DigitalOcean Refresh Token
+  - Figma Personal Access Token
   - GitLab Personal Access Token
   - GitLab Pipeline Trigger Token
   - GitLab Runner Registration Token
+  - Google OAuth Client Secret (prefixed)
   - New Relic API Service Key
   - New Relic Admin API Key
   - New Relic Insights Insert Key
@@ -32,6 +39,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - New Relic Pixie Deploy Key
   - New Relic REST API Key
   - NPM Access Token (fine-grained)
+  - Segment Public API Token
+  - Shopify Access Token (Custom App)
+  - Shopify Access Token (Legacy Private App)
+  - Shopify Access Token (Public App)
+  - Shopify App Secret
+  - Shopify Domain
   - RubyGems API Key
   - Telegram Bot Token
 
@@ -47,7 +60,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   In particular, several rules previously had avoided using a trailing `\b` anchor after secret content which could include a literal `-` character, due to a matching discrepancy between Hyperscan and Rust's `regex` library.
   These have been revised to use a more complicated but functional anchoring pattern.
 
+- The `JSON Web Token (base64url-encoded)` rule has been changed to only produce a single match group instead of three.
+
+- The `Google Client Secret` rule has been improved to detect additional occurrences and has been renamed to `Google OAuth Client Secret`.
+
 - Blobs are now deduplicated at enumeration time when first enumerating a Git repository, rather than only at scan time. This results in more accurate progress bars.
+
+- When scanning, Git repositories are now opened twice: once at input enumeration time, and once at scanning time.
+  This drastically reduces the amount of memory required to scan a large number of Git repositories.
 
 
 ## [v0.11.0](https://github.com/praetorian-inc/noseyparker/releases/v0.11.0) (2022-12-30)
