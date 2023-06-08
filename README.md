@@ -4,95 +4,60 @@ Nosey Parker is a command-line tool that finds secrets and sensitive information
 
 **Key features:**
 - It supports scanning files, directories, and the entire history of Git repositories
-- It uses regular expression matching with a set of 88 patterns chosen for high signal-to-noise based on experience and feedback from offensive security engagements
+- It uses regular expression matching with a set of 99 patterns chosen for high signal-to-noise based on experience and feedback from offensive security engagements
 - It groups matches together that share the same secret, further emphasizing signal over noise
 - It is fast: it can scan at hundreds of megabytes per second on a single core, and is able to scan 100GB of Linux kernel source history in less than 2 minutes on an older MacBook Pro
 
-This open-source version of Nosey Parker is a reimplementation of the internal version in use at Praetorian. The internal version has additional capabilities for false positive suppression and an alternative machine learning-based detection engine. Read more in blog posts [here](https://www.praetorian.com/blog/nosey-parker-ai-secrets-scanner-release/) and [here](https://www.praetorian.com/blog/six-months-of-finding-secrets-with-nosey-parker/).
+This open-source version of Nosey Parker is a reimplementation of the internal version that is regularly used in offensive security engagements at [Praetorian](https://praetorian.com). The internal version has additional capabilities for false positive suppression and an alternative machine learning-based detection engine. Read more in blog posts [here](https://www.praetorian.com/blog/nosey-parker-ai-secrets-scanner-release/) and [here](https://www.praetorian.com/blog/six-months-of-finding-secrets-with-nosey-parker/).
 
 
-## Building from source
+## Installation
 
-**1. (On x86_64) Install the [Hyperscan](https://github.com/intel/hyperscan) library and headers for your system**
+### Prebuilt Binaries
 
-On macOS using Homebrew:
+Prebuilt binaries are available for x86_64 Linux and x86_64/ARM64 macOS on the [latest release page](https://github.com/praetorian-inc/noseyparker/releases/latest).
+This is the simplest way to get started and will give good performance.
 
-```
-brew install hyperscan pkg-config
-```
+### Docker Image
 
-On Ubuntu 22.04:
-
-```
-apt install libhyperscan-dev pkg-config
-```
-
-**1. (On non-x86_64) Build [Vectorscan](https://github.com/Vectorcamp/vectorscan) from source**
-
-You will need several dependencies, including `cmake`, `boost`, `ragel`, and `pkg-config`.
-
-Download and extract the source for the [5.4.8 release](https://github.com/VectorCamp/vectorscan/releases/tag/vectorscan%2F5.4.8) of Vectorscan:
-
-```
-wget https://github.com/VectorCamp/vectorscan/archive/refs/tags/vectorscan/5.4.8.tar.gz && tar xfz 5.4.8.tar.gz
-```
-
-Build with cmake:
-
-```
-cd vectorscan-vectorscan-5.4.8 && cmake -B build -DFAT_RUNTIME=OFF -DCMAKE_BUILD_TYPE=Release . && cmake --build build
-```
-
-Set the `HYPERSCAN_ROOT` environment variable so that Nosey Parker builds against your from-source build of Vectorscan:
-
-```
-export HYPERSCAN_ROOT="$PWD/build"
-```
-
-**Note:** The Nosey Parker [`Dockerfile`](Dockerfile) builds Vectorscan from source and links against that.
-
-
-**2. Install the Rust toolchain**
-
-Recommended approach: install from <https://rustup.rs>
-
-**3. Build using [Cargo](https://doc.rust-lang.org/cargo/)**
-
-```
-cargo build --release
-```
-This will produce a binary at `target/release/noseyparker`.
-
-## Docker Usage
-
-**A [prebuilt Docker image](https://ghcr.io/praetorian-inc/noseyparker:latest) is available for the latest release for x86_64:**
+A prebuilt multiplatform Docker image is available for the latest release for x86_64 and ARM64:
 
 ```
 docker pull ghcr.io/praetorian-inc/noseyparker:latest
 ```
 
-**A [prebuilt Docker image](https://ghcr.io/praetorian-inc/noseyparker:edge) is available for the most recent commit for x86_64:**
+A prebuilt Docker image is available for the most recent commit for x86_64:
 
 ```
 docker pull ghcr.io/praetorian-inc/noseyparker:edge
 ```
 
-**For other architectures (e.g., ARM) you will need to build the Docker image yourself:**
-
-```
-docker build -t noseyparker .
-```
-
-**Run the Docker image with a mounted volume:**
-
-```
-docker run -v "$PWD":/opt/ noseyparker
-```
-
 **Note:** The Docker image runs noticeably slower than a native binary, particularly on macOS.
 
+### Building from source
+
+**1. Prerequisites**
+This has been tested on several versions of Ubuntu Linux on x86_64 and on macOS running on both Intel and ARM processors.
+
+Required dependencies:
+- `cargo`: recommended approach:install from <https://rustup.rs>
+- `cmake`: needed for building the `vectorscan-sys` crate
+- `git`: needed for embedding version information into the `noseyparker` CLI
+
+**2. Build using [Cargo](https://doc.rust-lang.org/cargo/)**
+
+```
+cargo build --release
+```
+This will produce an optimized binary at `target/release/noseyparker`.
 
 ## Usage quick start
+
+**Note:** If you are using the Docker image, replace `noseyparker` in the following commands with a Docker invocation that uses a mounted volume:
+
+```
+docker run -v "$PWD":/opt/ ghcr.io/praetorian-inc/noseyparker:latest <ARGS>
+```
 
 ### The datastore
 Most Nosey Parker commands use a _datastore_.
@@ -250,6 +215,8 @@ If you are considering making significant code changes, please [open an issue](h
 
 
 ## License
-Nosey Parker is licensed under the [Apache License, Version 2.0](LICENSE-APACHE).
+Nosey Parker is licensed under the [Apache License, Version 2.0](LICENSE).
 
 Any contribution intentionally submitted for inclusion in Nosey Parker by you, as defined in the Apache 2.0 license, shall be licensed as above, without any additional terms or conditions.
+
+Nosey Parker also includes vendored copies of several other packages released under the Apache License and other permissive licenses; see `LICENSE` for details.

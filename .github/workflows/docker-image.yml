@@ -1,4 +1,4 @@
-name: Docker Image CI
+name: Docker
 
 on:
   push:
@@ -9,16 +9,18 @@ on:
 
 jobs:
   build:
-    name: Build, Test, and (Optionally) Publish
+    name: Docker
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
+    # - uses: docker/setup-qemu-action@v2  # for multi-platform build
     - uses: docker/setup-buildx-action@v2
 
     - name: Build Docker image
-      uses: docker/build-push-action@v3
+      uses: docker/build-push-action@v4
       with:
         tags: noseyparker
+        # platforms: linux/amd64,linux/arm64
         load: true
         cache-from: type=gha
         cache-to: type=gha,mode=max
