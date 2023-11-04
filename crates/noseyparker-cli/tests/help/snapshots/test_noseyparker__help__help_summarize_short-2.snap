@@ -4,16 +4,16 @@ expression: stdout
 ---
 Summarize scan findings
 
-Usage: noseyparker summarize [OPTIONS] --datastore <PATH>
+Usage: noseyparker summarize [OPTIONS]
 
 Options:
-  -d, --datastore <PATH>  Use the specified datastore [env: NP_DATASTORE=]
+  -d, --datastore <PATH>  Use the specified datastore [env: NP_DATASTORE=] [default: datastore.np]
   -h, --help              Print help (see more with '--help')
 
 Output Options:
   -o, --output <PATH>    Write output to the specified path
   -f, --format <FORMAT>  Write output in the specified format [default: human] [possible values:
-                         human, json, jsonl, sarif]
+                         human, json, jsonl]
 
 Global Options:
   -v, --verbose...       Enable verbose output

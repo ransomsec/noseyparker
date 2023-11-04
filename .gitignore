@@ -10,3 +10,9 @@
 **/*.rs.bk
 
 .buildx-cache
+
+# scripts/create-release.zsh output directory
+/release
+
+# Ignore generated credentials from google-github-actions/auth
+gha-creds-*.json

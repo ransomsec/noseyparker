@@ -4,13 +4,14 @@ expression: stdout
 ---
 Report detailed scan findings
 
-Usage: noseyparker report [OPTIONS] --datastore <PATH>
+Usage: noseyparker report [OPTIONS]
 
 Options:
   -d, --datastore <PATH>
           Use the specified datastore
           
           [env: NP_DATASTORE=]
+          [default: datastore.np]
 
   -h, --help
           Print help (see a summary with '-h')
@@ -31,6 +32,13 @@ Output Options:
           - json:  Pretty-printed JSON format
           - jsonl: JSON Lines format
           - sarif: SARIF format
+
+      --max-matches <N>
+          Limit the number of matches per finding to at most N
+          
+          A negative value means "no limit".
+          
+          [default: 3]
 
 Global Options:
   -v, --verbose...
@@ -65,6 +73,15 @@ Advanced Global Options:
           running out of file descriptors.
           
           [default: 16384]
+
+      --sqlite-cache-size <SIZE>
+          Set the cache size for sqlite connections to SIZE
+          
+          This has the effect of setting SQLite's `pragma cache_size=SIZE`. The default value is set
+          to use a maximum of 8GiB for database cache. See
+          <https://sqlite.org/pragma.html#pragma_cache_size> for more details.
+          
+          [default: -8388608]
 
       --enable-backtraces <BOOL>
           Enable or disable backtraces on panic

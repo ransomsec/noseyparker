@@ -1,11 +1,143 @@
-# Changelog
+# Nosey Parker Changelog
 
-All notable changes to this project will be documented in this file.
+This is the changelog for [Nosey Parker](https://github.com/praetorian-inc/noseyparker).
+All notable changes to the project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project aspires to eventually use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project aspires to use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
 ## Unreleased
+
+### Additions
+- The `scan` command now supports a new `--copy-blobs={all,matching,none}` parameter.
+  When specified as `matching`, a copy of each encountered blob that has matches will be saved to the datastore's `blobs` directory.
+  When specified as `all`, a copy of _each_ encountered blob will be saved.
+  The default value is `none`.
+  This mechanism exists to aid in ad-hoc downstream investigation.
+  Copied blobs are not used elsewhere in Nosey Parker at this point.
+
+- A new advanced global command-line parameter has been exposed:
+
+  - `--sqlite-cache-size=SIZE` to control the `pragma cache_size` value used in sqlite database connections
+
+- The datastore now contains two additional tables for to represent freeform comments and accept/reject status associated with findings.
+  These additional tables are not currently populated in the open-source version of Nosey Parker.
+  The `report` command now emits finding status and comment if populated.
+
+- A new "ruleset" mechanism has been added.
+  A ruleset is a named collection of rules that can be selected as a group.
+  The new `--ruleset=NAME` parameter to `scan` can be used to enable additional rulesets.
+  Two built-in rulesets are provided (`np.default` and `np.assets`); the special ruleset name `all` enables all known rules.
+  The default ruleset can be disabled using the new `--enable-default-ruleset=false` parameter to `scan`.
+  See the built-in rulesets at `crates/noseyparker/data/default/builtin/rulesets` for an example for writing your own.
+
+- The default collection of rules has been pruned down to further emphasize signal-to-noise.
+  Only rules that detect secret things are included in the default collection.
+  Rules that detect other things, such as cloud assets, application IDs, or public keys, are not included in this set.
+  Instead, those are in the `np.assets` ruleset, which is not enabled by default.
+  No rules have been removed from Nosey Parker; rather, the defaults have been adjusted to support the most common use case (secrets detection).
+
+- Additional checks have been added to the `rules check` command:
+
+  - Each regex rule must have at least one capture group
+  - Each ruleset must have a globally-unique ID
+  - A ruleset's included rules must resolve to actual rules
+  - A ruleset should not include duplicate rules
+
+- A new `rules list` command is available, which lists available rules and rulesets.
+  This command can emit its output in human-oriented format or in JSON format.
+
+- New rules have been added:
+
+  - React App Username
+  - React App Password
+
+### Fixes
+- Command-line parameters that can meaningfully accept negative numbers can now be specified without having to use `--PARAMETER=NEGATIVE_VALUE` syntax; a space can now separate the paraemter and the value.
+
+- Fixed three rules that were missing capture groups:
+
+  - Age Recipient (X25519 public key)
+  - Age Identity (X22519 secret key)
+  - crates.io API Key
+
+  Due to nuanced details of how scanning is performed, rules without capture groups will never produce reported matches.
+  An additional check was added to the `rules check` command and a couple assertions were added that should help prevent this type of error in the future.
+
+- Fixed several rules:
+
+  - Amazon MWS Auth Token: the capture group was smaller than it should have been
+  - Microsoft Teams Webhook: changed 3 capture groups to 1; full URL is now included
+  - Slack Webhook: full URL is now included
+
+- The LICENSE, README.md, and CHANGELOG.md files are now included in prebuilt binary releases.
+
+### Changes
+- The `rules check` command invocation now behaves differently.
+  It now no longer requires input paths to be specified.
+  It will check the built-in rules for problems, and if additional paths are specified, will check those rules as well.
+  This change was made so that the `scan`, `rules check`, and `rules list` invocations have consistent interfaces.
+
+- The default path-based ignore rules in Nosey Parker now ignore `packed-refs` files from Git repositories.
+
+- Several rules have been changed:
+
+  - The `Slack` rule (id `np.slack.1`) has been removed, as it was redundant with `Slack Token`.
+  - `Slack Token` has been split into `Slack Bot Token`, `Slack Legacy Bot Token`, `Slack User Token`, and `Slack App Token`.
+  - `CodeClimate` was enhanced to detect additional cases and was renamed to `CodeClimate Reporter ID`.
+
+
+## [v0.15.0](https://github.com/praetorian-inc/noseyparker/releases/v0.15.0) (2023-10-12)
+
+### Additions
+- A default value (`datastore.np`) is now set for commands that take a datastore parameter ([#74](https://github.com/praetorian-inc/noseyparker/issues/74)).
+  This makes simpler `noseyparker` command-line invocations possible.
+
+- A new `shell-completions` command has been added, which generates shell-specific completion scripts for zsh, bash, fish, powershell, and elvish ([#76](https://github.com/praetorian-inc/noseyparker/pull/76)).
+  These generated completion scripts make discovery of Nosey Parker's command-line API simpler.
+  Thank you @Coruscant11!
+
+- The `report` command supports a new `--max-matches=N` parameter to control the maximum number of matches that will be output for any single finding ([#75](https://github.com/praetorian-inc/noseyparker/issues/75)).
+  A negative number means "no limit".
+
+- The `scan` command now supports a new `--git-history={full,none}` parameter to control whether encountered Git history will be scanned.
+  This defaults to `full`, but specifying a value of `none` will cause Git history to be ignored.
+
+- New rules have been added:
+
+  - Mapbox Temporary Access Token
+  - Salesforce Access Token
+
+- A new `disable_tracing` Cargo feature has been added, which disables `trace`-level logging and tracing messages.
+  This feature is also aliased by a new `release` feature, which is enabled in prebuilt releases.
+
+- The `NP_LOG` environment variable is inspected at runtime to allow find-grain control over Nosey Parker's diagnostic output.
+  The syntax of this variable are defined by the [`tracing-subscriber`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) Rust crate.
+
+### Changes
+- All the output formats for the `report` command now respect the new `--max-matches=N` parameter.
+  Previously, the output formats other than `human` would run without limit (i.e., as though `--max-matches=-1` had been specified).
+
+- The release process is now codified in a shell script: `scripts/create-release.zsh`.
+  This emits a release tree at `release` in the top-level of the repository, which includes the prebuilt binary as well as shell completions ([#80](https://github.com/praetorian-inc/noseyparker/issues/80)).
+
+- The `report` command has improved performance when using JSON output format.
+  Previously, the entire JSON output document needed to be accumulated in memory and then written in one step at the end.
+  Now, the JSON output document is written in a streaming fashion, one finding at a time.
+
+- `mimalloc` is now used as the global allocator ([#81](https://github.com/praetorian-inc/noseyparker/issues/81)).
+  This reduces peak resident memory when scanning large inputs with a high degree of parallelism.
+
+### Fixes
+- Fixed a bug in the `report` command when `--format=sarif` is used which caused some metadata to be unintentionally omitted from the output.
+
+
+## [v0.14.0](https://github.com/praetorian-inc/noseyparker/releases/v0.14.0) (2023-08-17)
+
+A [prebuilt multiplatform Docker image](https://github.com/praetorian-inc/noseyparker/pkgs/container/noseyparker/119700654?tag=v0.14.0) for this release is available for x86_64 and ARM64 architectures:
+```
+docker pull ghcr.io/praetorian-inc/noseyparker:v0.14.0
+```
 
 ### Additions
 - Running `noseyparker --version` now emits many compile-time details about the build, which can be useful for troubleshooting ([#48](https://github.com/praetorian-inc/noseyparker/issues/48)).
@@ -14,11 +146,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - New rules have been added:
 
+  - Amazon Resource Name
   - AWS S3 Bucket (subdomain style)
   - AWS S3 Bucket (path style)
   - Google Cloud Storage Bucket (subdomain style)
   - Google Cloud Storage Bucket (path style)
   - HuggingFace User Access Token ([#54](https://github.com/praetorian-inc/noseyparker/pull/54)—thank you @AdnaneKhan!)
+
+- Rules are now required to have a globally-unique identifier ([#62](https://github.com/praetorian-inc/noseyparker/pull/62))
 
 - Two new advanced global command-line parameters have been exposed:
 
@@ -27,10 +162,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - The snippet length for matches found by the `scan` command can now be controlled with the new `--snippet-length BYTES` parameter.
 
-- The Git repository cloning behavior in the `scan` command can now be controlled with the new `--git-clone-mode MODE` parameter.
+- The Git repository cloning behavior in the `scan` command can now be controlled with the new `--git-clone-mode {mirror,bare}` parameter.
 
+- The `scan` command now collects additional metadata about blobs.
+  This metadata includes size in bytes and guessed mime type based on filename extension.
+  Optionally, if the non-default `libmagic` Cargo feature is enabled, the mime type and charset are guessed by passing the content of the blob through `libmagic` (the guts of the `file` command-line program).
+
+  By default, all this additional metadata is recorded into the datastore for each blob in which matches are found.
+  This can be more precisely controlled using the new `--blob-metadata={all,matching,none}` parameter.
+
+  This newly-collected metadata is included in output of the `report` command.
+
+- The `scan` command now collects additional metadata about blobs found within Git repositories.
+  Specifically, for each blob found in Git repository history, the set of commits where it was introduced and the accompanying pathname for the blob is collected ([#16](https://github.com/praetorian-inc/noseyparker/issues/16)).
+  This is enabled by default, but can be controlled using the new `--git-blob-provenance={first-seen,minimal}` parameter.
+
+  This newly-collected metadata is included in output of the `report` command.
 
 ### Changes
+- The datastore schema has been changed in an incompatible way such that migrating existing datastores to the new version is not possible.
+  This was necessary to support the significantly increased metadata that is now collected when scanning.
+  Datastores from earlier releases of Nosey Parker cannot be used with this release; instead, the inputs will have to be rescanned with a new datastore.
+
+- The JSON and JSONL output formats for the `report` command have changed slightly.
+  In particular, the `.matches[].provenance` field is now an array of objects instead of a single object, making it possible to handle situations where a blob is discovered multiple ways.
+  The `provenenance` objects have some renamed fields, and contain significantly more metadata than before.
+
+
 - Existing rules were modified to reduce both false positives and false negatives:
 
   - Generic Password (double quoted)
@@ -42,16 +200,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - When a Git repository is cloned, the default behavior is to match `git clone --bare` instead of `git clone --mirror`.
   This new default behavior results in cloning potentially less content, but avoids cloning content from forks from repositories hosted on GitHub.
 
-- The command-line help has been refined for clarity
+- The command-line help has been refined for clarity.
 
+- Scanning performance has been improved on particular workloads by as much as 2x by recording matches to the datastore in larger batches.
+  This is particularly relevant to heavy multithreaded scanning workloads where the inputs have many matches.
 
 ### Fixes
 - Python is no longer required as a build-time dependency for `vectorscan-sys`.
 
+- A typo was fixed in the Okta API Key rule that caused it to truncate the secret.
+
+- The `scan` command now correctly reports the number of newly-seen matches when reusing an existing datastore.
+
 
 ## [v0.13.0](https://github.com/praetorian-inc/noseyparker/releases/v0.13.0) (2023-04-24)
 
-A prebuilt multiplatform Docker image for this release is available for x86_64 and ARM64 architectures:
+A [prebuilt multiplatform Docker image](https://github.com/praetorian-inc/noseyparker/pkgs/container/noseyparker/88043263?tag=v0.13.0) for this release is available for x86_64 and ARM64 architectures:
 ```
 docker pull ghcr.io/praetorian-inc/noseyparker:v0.13.0
 ```

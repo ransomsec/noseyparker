@@ -1,8 +1,8 @@
 ---
-source: crates/noseyparker-cli/tests/test_noseyparker_help.rs
+source: crates/noseyparker-cli/tests/help/mod.rs
 expression: stdout
 ---
-noseyparker 0.13.0-dev
+noseyparker 0.16.0-dev
 
 Build Configuration:
 
@@ -12,8 +12,8 @@ Build Configuration:
     Commit Branch:      <PLACEHOLDER>
     Commit SHA:         <PLACEHOLDER>
 
-    Cargo Features:     
-    <PLACEHOLDER>
+    Cargo Features:     <PLACEHOLDER>
+    Debug:              <PLACEHOLDER>
     Optimization:       <PLACEHOLDER>
     Target Triple:      <PLACEHOLDER>
 

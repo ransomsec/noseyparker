@@ -4,15 +4,19 @@ expression: stdout
 ---
 Scan content for secrets
 
-Usage: noseyparker scan [OPTIONS] --datastore <PATH> [INPUT]...
+Usage: noseyparker scan [OPTIONS] [INPUT]...
 
 Options:
-  -d, --datastore <PATH>        Use the specified datastore [env: NP_DATASTORE=]
-  -j, --jobs <N>                Use N parallel scanning jobs [default: DEFAULT]
-      --snippet-length <BYTES>  Include up to the specified number of bytes before and after each
-                                match [default: 256]
-  -r, --rules <PATH>            Use custom rules from the specified file or directory
-  -h, --help                    Print help (see more with '--help')
+  -d, --datastore <PATH>  Use the specified datastore [env: NP_DATASTORE=] [default: datastore.np]
+  -j, --jobs <N>          Use N parallel scanning threads [default: DEFAULT]
+  -h, --help              Print help (see more with '--help')
+
+Rule Selection Options:
+      --rules <PATH>                   Load additional rules and rulesets from the specified file or
+                                       directory
+      --ruleset <ID>                   Enable an additional ruleset with the specified ID
+      --enable-default-ruleset <BOOL>  Enable or disable the default ruleset [default: true]
+                                       [possible values: true, false]
 
 Input Specifier Options:
   [INPUT]...                    Scan the specified file, directory, or local Git repository
@@ -23,12 +27,26 @@ Input Specifier Options:
                                     specified GitHub user
       --github-api-url <URL>        Use the specified URL for GitHub API access [default:
                                     https://api.github.com/] [aliases: api-url]
-      --git-clone-mode <MODE>       Use the specified method for cloning Git repositories [default:
+      --git-clone <MODE>            Use the specified method for cloning Git repositories [default:
                                     bare] [possible values: bare, mirror]
+      --git-history <MODE>          Use the specified mode for handling Git history [default: full]
+                                    [possible values: full, none]
 
 Content Filtering Options:
       --max-file-size <MEGABYTES>  Do not scan files larger than the specified size [default: 100]
   -i, --ignore <FILE>              Use custom path-based ignore rules from the specified file
+
+Metadata Collection Options:
+      --blob-metadata <MODE>        Specify which blobs will have metadata recorded [default:
+                                    matching] [possible values: all, matching, none]
+      --git-blob-provenance <MODE>  Specify which Git commit provenance metadata will be collected
+                                    [default: first-seen] [possible values: first-seen, minimal]
+
+Data Collection Options:
+      --snippet-length <BYTES>  Include up to the specified number of bytes before and after each
+                                match [default: 256]
+      --copy-blobs <MODE>       Specify which blobs will be copied in entirety to the datastore
+                                [default: none] [possible values: all, matching, none]
 
 Global Options:
   -v, --verbose...       Enable verbose output

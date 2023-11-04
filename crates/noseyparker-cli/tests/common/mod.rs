@@ -8,7 +8,7 @@ use indoc::indoc;
 pub use assert_cmd::prelude::*;
 pub use assert_fs::prelude::*;
 pub use assert_fs::{fixture::ChildPath, TempDir};
-pub use insta::{assert_display_snapshot, assert_json_snapshot, assert_snapshot, with_settings};
+pub use insta::{assert_display_snapshot, assert_json_snapshot, assert_snapshot, with_settings, internals::Redaction};
 pub use predicates::str::{RegexPredicate, is_empty};
 pub use pretty_assertions::{assert_eq, assert_ne};
 pub use std::path::Path;
@@ -92,7 +92,7 @@ pub fn noseyparker_cmd() -> Command {
 */
 
 pub fn noseyparker_cmd() -> Command {
-    Command::cargo_bin("noseyparker").expect("noseyparker should be executable")
+    Command::cargo_bin("noseyparker-cli").expect("noseyparker should be executable")
 }
 
 /// Create a `RegexPredicate` from the given pattern.
@@ -116,7 +116,7 @@ pub fn match_scan_stats(
 /// Create a `RegexPredicate` for matching a "nothing was scanned" scan stats output message from
 /// Nosey Parker.
 pub fn match_nothing_scanned() -> RegexPredicate {
-    match_scan_stats("0B", 0, 0, 0)
+    match_scan_stats("0 B", 0, 0, 0)
 }
 
 /// A type to represent a mock scanning environment for testing Nosey Parker.
@@ -157,12 +157,12 @@ impl ScanEnv {
     }
 
     /// Create a small input file within this mock scanning environment with the given name.
-    /// The created input file will have content containing a fake AWS key that should be detected.
+    /// The created input file will have content containing a fake GitHub PAT that should be detected.
     pub fn input_file_with_secret(&self, name: &str) -> ChildPath {
         self.input_file_with_contents(name, indoc! {r#"
             # This is fake configuration data
             USERNAME=the_dude
-            AWS_KEY=AKIADEADBEEFDEADBEEF
+            GITHUB_KEY=ghp_XIxB7KMNdAr3zqWtQqhE94qglHqOzn1D1stg
         "#})
     }
 
@@ -199,7 +199,7 @@ impl ScanEnv {
 
             # This is fake configuration data
             USERNAME=the_dude
-            AWS_KEY=AKIADEADBEEFDEADBEEF
+            GITHUB_KEY=ghp_XIxB7KMNdAr3zqWtQqhE94qglHqOzn1D1stg
 
             function lorem(ipsum, dolor = 1) {
               const sit = ipsum == null ? 0 : ipsum.sit;
@@ -263,4 +263,20 @@ pub fn create_empty_git_repo(destination: &Path) {
         .success()
         .stdout(is_empty())
         .stderr(is_empty());
+}
+
+
+pub fn get_report_stdout_filters() -> Vec<(&'static str, &'static str)> {
+    vec![
+        (r"(?m)^(\s*File: ).*$", r"$1 <FILENAME>"),
+        (r"(?m)^(\s*Blob: ).*$", r"$1 <BLOB>"),
+    ]
+}
+
+pub fn get_report_json_redactions() -> Vec<(&'static str, Redaction)> {
+    vec![
+        ("[].matches[].provenance[].path", Redaction::from("<ROOT>/input.txt")),
+        ("[].score", insta::rounded_redaction(3)),
+        ("[].matches[].score", insta::rounded_redaction(3)),
+    ]
 }

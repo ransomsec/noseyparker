@@ -40,10 +40,6 @@ env:
   CARGO_PROFILE_DEV_DEBUG: '0'
   CARGO_PROFILE_TEST_DEBUG: '0'
 
-  # Use Cargo 1.68's new "sparse" checkout mode, which is much faster at getting crates.io index information
-  # https://blog.rust-lang.org/inside-rust/2023/01/30/cargo-sparse-protocol.html
-  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: 'sparse'
-
 jobs:
   tests:
     name: CI
@@ -53,46 +49,62 @@ jobs:
     strategy:
       matrix:
         build:
-        - macos-12.stable.test
-        - ubuntu-20.04.stable.release
-        - ubuntu-22.04.stable.test
+        - macos-13.arm64.stable.test
+        - macos-12.x86_64.stable.test
+        - ubuntu-20.04.x86_64.stable.release
+        - ubuntu-22.04.x86_64.stable.test
 
         include:
-        - build: ubuntu-20.04.stable.release
+        - build: ubuntu-20.04.x86_64.stable.release
           os: ubuntu-20.04
           rust: stable
           profile: release
+          features: release
           install_dependencies: |
-            true
+            sudo apt-get install zsh
 
           check_docs: false
           check_rules: false
           run_tests: true
 
-        - build: ubuntu-22.04.stable.test
+        - build: ubuntu-22.04.x86_64.stable.test
           os: ubuntu-22.04
           rust: stable
           profile: test
+          features:
           install_dependencies: |
-            true
+            sudo apt-get install zsh
 
           check_docs: true
           check_rules: true
           run_tests: true
 
-        - build: macos-12.stable.test
+        - build: macos-12.x86_64.stable.test
           os: macos-12
           rust: stable
           profile: test
+          features:
           install_dependencies: |
-            true
+            brew install coreutils
+
+          check_docs: false
+          check_rules: false
+          run_tests: true
+
+        - build: macos-13.arm64.stable.test
+          os: macos-13-xlarge  # m1-based macos
+          rust: stable
+          profile: test
+          features:
+          install_dependencies: |
+            brew install coreutils
 
           check_docs: false
           check_rules: false
           run_tests: true
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install dependencies
       run: ${{ matrix.install_dependencies }}
@@ -108,7 +120,7 @@ jobs:
 
     - name: Build tests
       if: ${{ matrix.run_tests }}
-      run: cargo test --no-run --locked --verbose --profile=${{ matrix.profile }} --timings
+      run: cargo test --no-run --locked --verbose --profile=${{ matrix.profile }} --features=${{ matrix.features }} --timings
 
     - name: Run tests
       if: ${{ matrix.run_tests }}
@@ -117,23 +129,19 @@ jobs:
         # spurious failures from rate limiting when testing Nosey Parker's github
         # enumeration capabilities.
         NP_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: cargo test --locked --verbose --profile=${{ matrix.profile }} --timings
+      run: cargo test --locked --verbose --profile=${{ matrix.profile }} --features=${{ matrix.features }} --timings
 
     - name: Build
       # We only `cargo build` separately if we are running the rule checker.
       # Otherwise this seems to just be wasted compute time!
       if: ${{ matrix.check_rules }}
-      run: cargo build --locked --verbose --profile=${{ matrix.profile }} --timings
-
-    - name: Check rules
-      if: ${{ matrix.check_rules }}
-      run: cargo run --locked --verbose --profile=${{ matrix.profile }} --timings -- rules check crates/noseyparker/data/default/rules --warnings-as-errors
+      run: cargo build --locked --verbose --profile=${{ matrix.profile }} --features=${{ matrix.features }} --timings
 
     - name: Check documentation
       if: ${{ matrix.check_docs }}
       env:
         RUSTDOCFLAGS: -D warnings
-      run: cargo doc --locked --verbose --profile=${{ matrix.profile }} --timings --no-deps --document-private-items
+      run: cargo doc --locked --verbose --profile=${{ matrix.profile }} --features=${{ matrix.features }} --timings --no-deps --document-private-items
 
     # See https://doc.rust-lang.org/nightly/cargo/reference/timings.html for details
     - name: Upload build timings

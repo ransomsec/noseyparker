@@ -6,7 +6,7 @@ publish.workspace = true
 
 license = "Apache-2.0 OR MIT"
 name = "vectorscan-sys"
-version.workspace = true
+version = "0.0.0"
 
 build = "build.rs"
 
@@ -15,7 +15,7 @@ build = "build.rs"
 gen = ["bindgen"]
 
 [build-dependencies]
-bindgen = { version = "0.66", optional = true }
+bindgen = { version = "0.68", optional = true }
 cmake = "0.1"
 
 [lib]

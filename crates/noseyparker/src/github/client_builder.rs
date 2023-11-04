@@ -14,7 +14,7 @@ pub struct ClientBuilder {
 
 impl ClientBuilder {
     /// The user agent string sent when accessing the GitHub REST API
-    const USER_AGENT: &str = "noseyparker";
+    const USER_AGENT: &'static str = "noseyparker";
 
     /// Create a new `ClientBuilder` that uses unauthenticated access to <https://api.github.com>.
     pub fn new() -> Self {
@@ -26,7 +26,7 @@ impl ClientBuilder {
 
     /// Use the specified base URL.
     pub fn base_url<T: IntoUrl>(mut self, url: T) -> Result<Self> {
-        self.base_url = url.into_url().map_err(Error::ReqwestError)?;
+        self.base_url = url.into_url()?;
         Ok(self)
     }
 
@@ -62,8 +62,7 @@ impl ClientBuilder {
     pub fn build(self) -> Result<Client> {
         let inner = reqwest::ClientBuilder::new()
             .user_agent(Self::USER_AGENT)
-            .build()
-            .map_err(Error::ReqwestError)?;
+            .build()?;
         Ok(Client {
             base_url: self.base_url,
             auth: self.auth,
