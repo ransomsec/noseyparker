@@ -113,6 +113,11 @@ impl CommandLineArgs {
             args.global_args.color = Mode::Never
         }
 
+        // If `--quiet` is specified, disable progress bars
+        if args.global_args.quiet {
+            args.global_args.progress = Mode::Never;
+        }
+
         args
     }
 }
@@ -191,9 +196,16 @@ pub struct GlobalArgs {
     #[arg(global=true, long, short, action=ArgAction::Count)]
     pub verbose: u8,
 
+    /// Suppress non-error feedback messages
+    ///
+    /// This silences WARNING, INFO, DEBUG, and TRACE messages and disables progress bars.
+    /// This overrides any provided verbosity and progress reporting options.
+    #[arg(global=true, long, short)]
+    pub quiet: bool,
+
     /// Enable or disable colored output
     ///
-    /// When this is "auto", colors are enabled when stdout is a tty.
+    /// When this is "auto", colors are enabled for stdout and stderr when they are terminals.
     ///
     /// If the `NO_COLOR` environment variable is set, it takes precedence and is equivalent to `--color=never`.
     #[arg(global=true, long, default_value_t=Mode::Auto, value_name="MODE")]
@@ -201,7 +213,7 @@ pub struct GlobalArgs {
 
     /// Enable or disable progress bars
     ///
-    /// When this is "auto", progress bars are enabled when stderr is a tty.
+    /// When this is "auto", progress bars are enabled when stderr is a terminal.
     #[arg(global=true, long, default_value_t=Mode::Auto, value_name="MODE")]
     pub progress: Mode,
 
@@ -223,13 +235,13 @@ pub struct AdvancedArgs {
     /// Set the cache size for sqlite connections to SIZE
     ///
     /// This has the effect of setting SQLite's `pragma cache_size=SIZE`.
-    /// The default value is set to use a maximum of 8GiB for database cache.
+    /// The default value is set to use a maximum of 1GiB for database cache.
     /// See <https://sqlite.org/pragma.html#pragma_cache_size> for more details.
     #[arg(
         hide_short_help=true,
         global=true,
         long,
-        default_value_t=-8 * 1024 * 1024,
+        default_value_t=-1 * 1024 * 1024,
         value_name="SIZE",
         allow_negative_numbers=true,
     )]
@@ -243,11 +255,11 @@ pub struct AdvancedArgs {
 }
 
 impl GlobalArgs {
-    pub fn use_color(&self) -> bool {
+    pub fn use_color<T: IsTerminal>(&self, out: T) -> bool {
         match self.color {
             Mode::Never => false,
             Mode::Always => true,
-            Mode::Auto => std::io::stdout().is_terminal(),
+            Mode::Auto => out.is_terminal(),
         }
     }
 
@@ -495,20 +507,19 @@ pub struct RuleSpecifierArgs {
     #[arg(long, value_name = "PATH", value_hint = ValueHint::AnyPath)]
     pub rules: Vec<PathBuf>,
 
-    /// Enable an additional ruleset with the specified ID
+    /// Enable the ruleset with the specified ID
     ///
     /// The ID must resolve to a built-in ruleset or to an additional ruleset loaded with the
-    /// `--rule-load-path=PATH` option.
+    /// `--rules=PATH` option.
     ///
     /// The special `all` ID causes all loaded rules to be used.
     ///
     /// This option can be repeated.
-    #[arg(long, value_name = "ID")]
+    ///
+    /// Specifying this option disables the default ruleset.
+    /// If you want to use a custom ruleset in addition to the default ruleset, specify this option twice, e.g., `--ruleset default --ruleset CUSTOM_ID`.
+    #[arg(long, value_name = "ID", default_values_t=["default".to_string()])]
     pub ruleset: Vec<String>,
-
-    /// Enable or disable the default ruleset
-    #[arg(long, default_value_t=true, action=ArgAction::Set, value_name="BOOL")]
-    pub enable_default_ruleset: bool,
 }
 
 /// The mode to use for cloning a Git repository
@@ -800,23 +811,6 @@ impl <Format: ValueEnum + Send + Sync> OutputArgs<Format> {
             }
         }
     }
-
-    /*
-    pub fn report(&self, format: Format::Format) -> Result<()> {
-        let writer = self
-            .get_writer()
-            .context("Failed to open output destination for writing")?;
-
-        match self.format.report(format, writer) {
-            Ok(()) => Ok(()),
-            Err(e) => match e.downcast_ref::<std::io::Error>() {
-                // Ignore SIGPIPE errors, like those that can come from piping to `head`
-                Some(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
-                _ => Err(e)?,
-            },
-        }
-    }
-    */
 }
 
 // -----------------------------------------------------------------------------

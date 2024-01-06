@@ -9,6 +9,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## Unreleased
 
 ### Additions
+
+- New rules have been added (thank you @gemesa!):
+
+  - Docker Hub Personal Access Token ([#108](https://github.com/praetorian-inc/noseyparker/pull/108))
+  - Doppler CLI Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
+  - Doppler Personal Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
+  - Doppler Service Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
+  - Doppler Service Account Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
+  - Doppler SCIM Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
+  - Doppler Audit Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
+  - Dropbox Access Token ([#106](https://github.com/praetorian-inc/noseyparker/pull/106))
+  - TrueNAS API Key (WebSocket) ([#110](https://github.com/praetorian-inc/noseyparker/pull/110))
+  - TrueNAS API Key (REST API) ([#110](https://github.com/praetorian-inc/noseyparker/pull/110))
+  - WireGuard Private Key ([#104](https://github.com/praetorian-inc/noseyparker/pull/104))
+  - WireGuard Preshared Key ([#104](https://github.com/praetorian-inc/noseyparker/pull/104))
+
+
+## [v0.16.0](https://github.com/praetorian-inc/noseyparker/releases/v0.16.0) (2023-12-06)
+
+### Additions
 - The `scan` command now supports a new `--copy-blobs={all,matching,none}` parameter.
   When specified as `matching`, a copy of each encountered blob that has matches will be saved to the datastore's `blobs` directory.
   When specified as `all`, a copy of _each_ encountered blob will be saved.
@@ -23,12 +43,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - The datastore now contains two additional tables for to represent freeform comments and accept/reject status associated with findings.
   These additional tables are not currently populated in the open-source version of Nosey Parker.
   The `report` command now emits finding status and comment if populated.
+  **Note: the datastore format is not settled and is subject to change.**
 
 - A new "ruleset" mechanism has been added.
   A ruleset is a named collection of rules that can be selected as a group.
-  The new `--ruleset=NAME` parameter to `scan` can be used to enable additional rulesets.
-  Two built-in rulesets are provided (`np.default` and `np.assets`); the special ruleset name `all` enables all known rules.
-  The default ruleset can be disabled using the new `--enable-default-ruleset=false` parameter to `scan`.
+  The new `--ruleset=NAME` parameter to `scan` can be used to enable alternative rulesets.
+  Three built-in rulesets are provided (`default`, `np.assets` and `np.hashes`); the special ruleset name `all` enables all known rules.
   See the built-in rulesets at `crates/noseyparker/data/default/builtin/rulesets` for an example for writing your own.
 
 - The default collection of rules has been pruned down to further emphasize signal-to-noise.
@@ -49,8 +69,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - New rules have been added:
 
+  - Dependency-Track API Key (Thank you @tpat13!)
+  - Password Hash (sha256crypt)
+  - Password Hash (sha512crypt)
+  - Password Hash (Cisco IOS PBKDF2 with SHA256)
   - React App Username
   - React App Password
+
+- A new global `--quiet` / `-q` option has been added, which suppresses non-error feedback messages and disables progress bars ([#97](https://github.com/praetorian-inc/noseyparker/issues/97)).
 
 ### Fixes
 - Command-line parameters that can meaningfully accept negative numbers can now be specified without having to use `--PARAMETER=NEGATIVE_VALUE` syntax; a space can now separate the paraemter and the value.
@@ -72,6 +98,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - The LICENSE, README.md, and CHANGELOG.md files are now included in prebuilt binary releases.
 
+- ANSI formatting sequences are now no longer included by default by the `report` command when the output is redirected to a file using the `-o`/`--outfile` parameter ([#55](https://github.com/praetorian-inc/noseyparker/issues/55)).
+
+- The `scan` command should no longer emit warnings like `Failed to decode entry in tree`.
+  These warnings were due to a bug in the Git object parsing code in the `gix` dependency, which was fixed upstream.
+
 ### Changes
 - The `rules check` command invocation now behaves differently.
   It now no longer requires input paths to be specified.
@@ -85,6 +116,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - The `Slack` rule (id `np.slack.1`) has been removed, as it was redundant with `Slack Token`.
   - `Slack Token` has been split into `Slack Bot Token`, `Slack Legacy Bot Token`, `Slack User Token`, and `Slack App Token`.
   - `CodeClimate` was enhanced to detect additional cases and was renamed to `CodeClimate Reporter ID`.
+  - `md5crypt Hash` (id `np.md5.1`) has been renamed to `Password Hash (md5crypt)` and re-identified as `np.pwhash.1`.
+  - `bcrypt Hash` (id `np.bcrypt.1`) has been renamed to `Password Hash (bcrypt)` and re-identified as `np.pwhash.2`.
+
+- Log messages are written to stderr instead of stdout ([#97](https://github.com/praetorian-inc/noseyparker/issues/97)).
 
 
 ## [v0.15.0](https://github.com/praetorian-inc/noseyparker/releases/v0.15.0) (2023-10-12)

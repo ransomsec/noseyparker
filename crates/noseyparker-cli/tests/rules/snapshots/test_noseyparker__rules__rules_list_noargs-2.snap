@@ -17,12 +17,20 @@ expression: stdout
  np.aws.5            Amazon MWS Auth Token 
  np.azure.1          Azure Connection String 
  np.azure.2          Azure App Configuration Connection String 
- np.bcrypt.1         bcrypt Hash 
  np.codeclimate.1    CodeClimate Reporter ID 
  np.cratesio.1       crates.io API Key 
  np.digitalocean.1   DigitalOcean Application Access Token 
  np.digitalocean.2   DigitalOcean Personal Access Token 
  np.digitalocean.3   DigitalOcean Refresh Token 
+ np.dockerhub.1      Docker Hub Personal Access Token 
+ np.doppler.1        Doppler CLI Token 
+ np.doppler.2        Doppler Personal Token 
+ np.doppler.3        Doppler Service Token 
+ np.doppler.4        Doppler Service Account Token 
+ np.doppler.5        Doppler SCIM Token 
+ np.doppler.6        Doppler Audit Token 
+ np.dropbox.1        Dropbox Access Token 
+ np.dtrack.1         Dependency-Track API Key 
  np.dynatrace.1      Dynatrace Token 
  np.facebook.1       Facebook Secret Key 
  np.facebook.2       Facebook Access Token 
@@ -65,7 +73,6 @@ expression: stdout
  np.mapbox.1         Mapbox Public Access Token 
  np.mapbox.2         Mapbox Secret Access Token 
  np.mapbox.3         Mapbox Temporary Access Token 
- np.md5.1            md5crypt Hash 
  np.msteams.1        Microsoft Teams Webhook 
  np.netrc.1          netrc Credentials 
  np.newrelic.1       New Relic License Key 
@@ -85,6 +92,11 @@ expression: stdout
  np.pem.1            PEM-Encoded Private Key 
  np.postman.1        Postman API Key 
  np.psexec.1         Credentials in PsExec 
+ np.pwhash.1         Password Hash (md5crypt) 
+ np.pwhash.2         Password Hash (bcrypt) 
+ np.pwhash.3         Password Hash (sha256crypt) 
+ np.pwhash.4         Password Hash (sha512crypt) 
+ np.pwhash.5         Password Hash (Cisco IOS PBKDF2 with SHA256) 
  np.pypi.1           PyPI Upload Token 
  np.reactapp.1       React App Username 
  np.reactapp.2       React App Password 
@@ -112,12 +124,17 @@ expression: stdout
  np.stripe.1         Stripe API Key 
  np.stripe.2         Stripe API Test Key 
  np.telegram.1       Telegram Bot Token 
+ np.truenas.1        TrueNAS API Key (WebSocket) 
+ np.truenas.2        TrueNAS API Key (REST API) 
  np.twilio.1         Twilio API Key 
  np.twitter.1        Twitter Client ID 
  np.twitter.2        Twitter Secret Key 
+ np.wireguard.1      WireGuard Private Key 
+ np.wireguard.2      WireGuard Preshared Key 
 
  Ruleset ID   Ruleset Name                         Rules 
 ─────────────────────────────────────────────────────────
+ default      Nosey Parker default rules             106 
  np.assets    Nosey Parker asset detection rules      15 
- np.default   Nosey Parker default rules              95 
+ np.hashes    Nosey Parker password hash rules         5 
 
