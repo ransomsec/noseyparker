@@ -5,6 +5,10 @@ expression: stdout
 {
   "rules": [
     {
+      "id": "np.adafruit.1",
+      "name": "Adafruit IO Key"
+    },
+    {
       "id": "np.adobe.1",
       "name": "Adobe OAuth Client Secret"
     },
@@ -341,6 +345,14 @@ expression: stdout
       "name": "OpenAI API Key"
     },
     {
+      "id": "np.particleio.1",
+      "name": "particle.io Access Token (URL first)"
+    },
+    {
+      "id": "np.particleio.2",
+      "name": "particle.io Access Token (URL last)"
+    },
+    {
       "id": "np.pem.1",
       "name": "PEM-Encoded Private Key"
     },
@@ -481,6 +493,18 @@ expression: stdout
       "name": "Telegram Bot Token"
     },
     {
+      "id": "np.thingsboard.1",
+      "name": "ThingsBoard Access Token"
+    },
+    {
+      "id": "np.thingsboard.2",
+      "name": "ThingsBoard Provision Device Key"
+    },
+    {
+      "id": "np.thingsboard.3",
+      "name": "ThingsBoard Provision Device Secret"
+    },
+    {
       "id": "np.truenas.1",
       "name": "TrueNAS API Key (WebSocket)"
     },
@@ -513,7 +537,7 @@ expression: stdout
     {
       "id": "default",
       "name": "Nosey Parker default rules",
-      "num_rules": 106
+      "num_rules": 112
     },
     {
       "id": "np.assets",

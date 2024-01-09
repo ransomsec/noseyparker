@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - New rules have been added (thank you @gemesa!):
 
+  - Adafruit IO Key ([#114](https://github.com/praetorian-inc/noseyparker/pull/114))
   - Docker Hub Personal Access Token ([#108](https://github.com/praetorian-inc/noseyparker/pull/108))
   - Doppler CLI Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
   - Doppler Personal Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
@@ -20,6 +21,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Doppler SCIM Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
   - Doppler Audit Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
   - Dropbox Access Token ([#106](https://github.com/praetorian-inc/noseyparker/pull/106))
+  - particle.io Access Token (URL first) ([#113](https://github.com/praetorian-inc/noseyparker/pull/113))
+  - particle.io Access Token (URL last) ([#113](https://github.com/praetorian-inc/noseyparker/pull/113))
+  - ThingsBoard Access Token ([#112](https://github.com/praetorian-inc/noseyparker/pull/112))
+  - ThingsBoard Provision Device Key ([#112](https://github.com/praetorian-inc/noseyparker/pull/112))
+  - ThingsBoard Provision Device Secret ([#112](https://github.com/praetorian-inc/noseyparker/pull/112))
   - TrueNAS API Key (WebSocket) ([#110](https://github.com/praetorian-inc/noseyparker/pull/110))
   - TrueNAS API Key (REST API) ([#110](https://github.com/praetorian-inc/noseyparker/pull/110))
   - WireGuard Private Key ([#104](https://github.com/praetorian-inc/noseyparker/pull/104))

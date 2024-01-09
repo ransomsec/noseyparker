@@ -15,6 +15,7 @@ rulesets:
 
 
   include_rule_ids:
+  - np.adafruit.1     # Adafruit IO Key
   - np.adobe.1        # Adobe OAuth Client Secret
   - np.age.2          # Age Identity (X22519 secret key)
   - np.artifactory.1  # Artifactory API Key
@@ -89,6 +90,8 @@ rulesets:
   - np.odbc.1         # Credentials in ODBC Connection String
   - np.okta.1         # Okta API Token
   - np.openai.1       # OpenAI API Key
+  - np.particleio.1   # particle.io Access Token (URL first)
+  - np.particleio.2   # particle.io Access Token (URL last)
   - np.pem.1          # PEM-Encoded Private Key
   - np.postman.1      # Postman API Key
   - np.psexec.1       # Credentials in PsExec
@@ -115,6 +118,9 @@ rulesets:
   - np.stripe.1       # Stripe API Key
   - np.stripe.2       # Stripe API Test Key
   - np.telegram.1     # Telegram Bot Token
+  - np.thingsboard.1  # ThingsBoard Access Token
+  - np.thingsboard.2  # ThingsBoard Provision Device Key
+  - np.thingsboard.3  # ThingsBoard Provision Device Secret
   - np.truenas.1      # TrueNAS API Key (WebSocket)
   - np.truenas.2      # TrueNAS API Key (REST API)
   - np.twilio.1       # Twilio API Key
