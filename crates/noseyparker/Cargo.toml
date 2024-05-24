@@ -26,29 +26,30 @@ bstr = { version = "1.0", features = ["serde"] }
 bstring-serde = { path = "../bstring-serde" }
 chrono = { version = "0.4", default_features = false, features = ["std"] }
 console = "0.15"
-fixedbitset = "0.4"
-
-gix = { version = "0.56", features = ["max-performance", "serde"] }
-
+fixedbitset = "0.5"
+gix = { version = "0.62", features = ["max-performance", "serde"] }
 hex = "0.4"
-hyperx = "1.4"
 include_dir = { version = "0.7", features = ["glob"] }
 input-enumerator = { path = "../input-enumerator" }
 indoc = "2.0"
 ignore = "0.4"
 lazy_static = "1.4"
+noseyparker-digest = { path = "../noseyparker-digest" }
 noseyparker-rules = { path = "../noseyparker-rules" }
 progress = { path = "../progress" }
 regex = "1.7"
-reqwest = { version = "0.11", features = ["json", "native-tls-vendored"] }
-rusqlite = { version = "0.30", features = ["bundled", "backup"] }
+reqwest = { version = "0.12", features = ["json", "native-tls-vendored"] }
+rusqlite = { version = "0.31", features = ["bundled", "backup", "serde_json"] }
+schemars = { version = "0.8", features = ["smallvec"] }
 secrecy = "0.8.0"
+smallvec = { version = "1", features = ["const_generics", "const_new", "union"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
 thiserror = "1"
 tokio = "1.23"
 tracing = "0.1"
 url = "2.3"
-vectorscan = { path = "../vectorscan" }
+vectorscan-rs = { version = "0.0.2" }
 
 [dev-dependencies]
 pretty_assertions = "1.3"

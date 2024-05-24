@@ -65,7 +65,7 @@ struct UserData {
 /// If doing multi-threaded scanning, use a separate `Matcher` for each thread.
 pub struct Matcher<'a> {
     /// A scratch buffer for Vectorscan
-    vs_scanner: vectorscan::BlockScanner<'a>,
+    vs_scanner: vectorscan_rs::BlockScanner<'a>,
 
     /// The rules database used for matching
     rules_db: &'a RulesDatabase,
@@ -110,8 +110,11 @@ impl<'a> Matcher<'a> {
         global_stats: Option<&'a Mutex<MatcherStats>>,
     ) -> Result<Self> {
         let raw_matches_scratch = Vec::with_capacity(16384);
-        let user_data = UserData { raw_matches_scratch, input_len: 0 };
-        let vs_scanner = vectorscan::BlockScanner::new(&rules_db.vsdb)?;
+        let user_data = UserData {
+            raw_matches_scratch,
+            input_len: 0,
+        };
+        let vs_scanner = vectorscan_rs::BlockScanner::new(&rules_db.vsdb)?;
         Ok(Matcher {
             vs_scanner,
             rules_db,
@@ -125,16 +128,21 @@ impl<'a> Matcher<'a> {
     fn scan_bytes_raw(&mut self, input: &[u8]) -> Result<()> {
         self.user_data.raw_matches_scratch.clear();
         self.user_data.input_len = input.len().try_into().unwrap();
-        self.vs_scanner.scan(input, |rule_id: u32, from: u64, to: u64, _flags: u32| {
-            // let start_idx = if from == vectorscan_sys::HS_OFFSET_PAST_HORIZON { 0 } else { from };
-            //
-            // NOTE: `from` is only going to be meaningful here if we start compiling rules
-            // with the HS_SOM_LEFTMOST flag. But it doesn't seem to hurt to use the 0-value
-            // provided when that flag is not used.
-            let start_idx = from.min(self.user_data.input_len);
-            self.user_data.raw_matches_scratch.push(RawMatch { rule_id, start_idx, end_idx: to });
-            vectorscan::Scan::Continue
-        })?;
+        self.vs_scanner
+            .scan(input, |rule_id: u32, from: u64, to: u64, _flags: u32| {
+                // let start_idx = if from == vectorscan_sys::HS_OFFSET_PAST_HORIZON { 0 } else { from };
+                //
+                // NOTE: `from` is only going to be meaningful here if we start compiling rules
+                // with the HS_SOM_LEFTMOST flag. But it doesn't seem to hurt to use the 0-value
+                // provided when that flag is not used.
+                let start_idx = from.min(self.user_data.input_len);
+                self.user_data.raw_matches_scratch.push(RawMatch {
+                    rule_id,
+                    start_idx,
+                    end_idx: to,
+                });
+                vectorscan_rs::Scan::Continue
+            })?;
         Ok(())
     }
 
@@ -155,7 +163,8 @@ impl<'a> Matcher<'a> {
         blob: &'b Blob,
         provenance: &ProvenanceSet,
     ) -> Result<ScanResult<'b>>
-        where 'a: 'b
+    where
+        'a: 'b,
     {
         // -----------------------------------------------------------------------------------------
         // Update local stats
@@ -166,7 +175,11 @@ impl<'a> Matcher<'a> {
 
         if let Some(had_matches) = self.seen_blobs.get(&blob.id) {
             // debug!("Blob {} already seen; skipping", &blob.id);
-            return Ok(if had_matches { ScanResult::SeenWithMatches } else { ScanResult::SeenSansMatches });
+            return Ok(if had_matches {
+                ScanResult::SeenWithMatches
+            } else {
+                ScanResult::SeenSansMatches
+            });
         }
 
         self.local_stats.blobs_scanned += 1;
@@ -194,13 +207,15 @@ impl<'a> Matcher<'a> {
         // -----------------------------------------------------------------------------------------
         #[cfg(feature = "rule_profiling")]
         for m in raw_matches_scratch.iter() {
-            self.local_stats.rule_stats.increment_match_count(m.rule_id as usize, 1);
+            self.local_stats
+                .rule_stats
+                .increment_match_count(m.rule_id as usize, 1);
         }
 
         // -----------------------------------------------------------------------------------------
         // Perform second-stage regex matching to get groups and precise start locations
         //
-        // Also deduplicate overlapping matches with the same rule
+        // Also deduplicate overlapping matches with the same rule, keeping only the longest match
         // -----------------------------------------------------------------------------------------
         raw_matches_scratch.sort_by_key(|m| {
             debug_assert!(m.start_idx <= m.end_idx);
@@ -243,7 +258,7 @@ impl<'a> Matcher<'a> {
                                 Snippet: {cxt:?}",
                                 &blob.id,
                                 provenance.first(),
-                                rule.name,
+                                rule.name(),
                             );
                         // });
 
@@ -290,18 +305,20 @@ impl<'a> Matcher<'a> {
 mod test {
     use super::*;
 
+    use noseyparker_rules::RuleSyntax;
+
     use pretty_assertions::assert_eq;
 
     #[test]
     pub fn test_simple() -> Result<()> {
-        let rules = vec![Rule {
+        let rules = vec![Rule::new(RuleSyntax {
             id: "test.1".to_string(),
             name: "test".to_string(),
             pattern: "test".to_string(),
             examples: vec![],
             negative_examples: vec![],
             references: vec![],
-        }];
+        })];
         let rules_db = RulesDatabase::from_rules(rules)?;
         let input = "some test data for vectorscan";
         let seen_blobs = BlobIdMap::new();

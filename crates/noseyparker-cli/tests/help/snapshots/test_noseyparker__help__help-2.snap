@@ -8,14 +8,15 @@ and Git history.
 Usage: noseyparker [OPTIONS] <COMMAND>
 
 Commands:
-  scan               Scan content for secrets
-  summarize          Summarize scan findings
-  report             Report detailed scan findings
-  github             Interact with GitHub
-  datastore          Manage datastores
-  rules              Manage rules
-  shell-completions  Generate shell completions
-  help               Print this message or the help of the given subcommand(s)
+  scan         Scan content for secrets
+  summarize    Summarize scan findings
+  report       Report detailed scan findings
+  github       Interact with GitHub
+  datastore    Manage datastores
+  rules        Manage rules and rulesets
+  annotations  Manage annotations (experimental)
+  generate     Generate Nosey Parker release assets
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help
@@ -55,6 +56,9 @@ Global Options:
           [default: auto]
           [possible values: auto, never, always]
 
+      --ignore-certs
+          Ignore validation of TLS certificates
+
 Advanced Global Options:
       --rlimit-nofile <LIMIT>
           Set the rlimit for number of open files to LIMIT
@@ -65,7 +69,7 @@ Advanced Global Options:
           [default: 16384]
 
       --sqlite-cache-size <SIZE>
-          Set the cache size for sqlite connections to SIZE
+          Set the cache size for SQLite connections to SIZE
           
           This has the effect of setting SQLite's `pragma cache_size=SIZE`. The default value is set
           to use a maximum of 1GiB for database cache. See
@@ -80,4 +84,3 @@ Advanced Global Options:
           
           [default: true]
           [possible values: true, false]
-

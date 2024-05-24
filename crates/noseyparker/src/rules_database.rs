@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
-use vectorscan::{BlockDatabase, Pattern, Flag};
 use regex::bytes::Regex;
 use std::time::Instant;
 use tracing::{debug, debug_span};
+use vectorscan_rs::{BlockDatabase, Flag, Pattern};
 
 use noseyparker_rules::Rule;
 
@@ -27,7 +27,7 @@ impl RulesDatabase {
             .enumerate()
             .map(|(id, r)| {
                 let id = id.try_into().unwrap();
-                Pattern::new(r.pattern.clone().into_bytes(), Flag::default(), Some(id))
+                Pattern::new(r.syntax().pattern.clone().into_bytes(), Flag::default(), Some(id))
             })
             .collect::<Vec<Pattern>>();
 
@@ -38,7 +38,7 @@ impl RulesDatabase {
         let t2 = Instant::now();
         let anchored_regexes = rules
             .iter()
-            .map(Rule::as_anchored_regex)
+            .map(|r| r.syntax().as_anchored_regex())
             .collect::<Result<Vec<Regex>>>()?;
         let d2 = t2.elapsed().as_secs_f64();
 
@@ -66,6 +66,10 @@ impl RulesDatabase {
     pub fn get_rule(&self, index: usize) -> Option<&Rule> {
         self.rules.get(index)
     }
+
+    pub fn rules(&self) -> &[Rule] {
+        self.rules.as_slice()
+    }
 }
 
 #[cfg(test)]
@@ -75,7 +79,7 @@ mod test {
 
     #[test]
     pub fn test_vectorscan_sanity() -> Result<()> {
-        use vectorscan::{BlockDatabase, Pattern, Scan, BlockScanner};
+        use vectorscan_rs::{BlockDatabase, BlockScanner, Pattern, Scan};
 
         let input = b"some test data for vectorscan";
         let pattern = Pattern::new(b"test".to_vec(), Flag::CASELESS | Flag::SOM_LEFTMOST, None);

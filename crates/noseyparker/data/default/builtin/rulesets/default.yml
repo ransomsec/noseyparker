@@ -19,13 +19,22 @@ rulesets:
   - np.adobe.1        # Adobe OAuth Client Secret
   - np.age.2          # Age Identity (X22519 secret key)
   - np.artifactory.1  # Artifactory API Key
+  - np.appsync.1      # AWS AppSync API Key
   - np.aws.2          # AWS Secret Access Key
   - np.aws.4          # AWS Session Token
   - np.aws.5          # Amazon MWS Auth Token
   - np.azure.1        # Azure Connection String
   - np.azure.2        # Azure App Configuration Connection String
+  - np.blynk.1        # Blynk Device Access Token
+  - np.blynk.2        # Blynk Organization Access Token (URL first)
+  - np.blynk.3        # Blynk Organization Access Token (URL last)
+  - np.blynk.4        # Blynk Organization Client ID (URL first)
+  - np.blynk.5        # Blynk Organization Client ID (URL last)
+  - np.blynk.6        # Blynk Organization Client Secret (URL first)
+  - np.blynk.7        # Blynk Organization Client Secret (URL last)
   - np.codeclimate.1  # CodeClimate
   - np.cratesio.1     # crates.io API Key
+  - np.databricks.1   # Databricks Personal Access Token
   - np.dtrack.1       # Dependency-Track API Key
   - np.digitalocean.1 # DigitalOcean Application Access Token
   - np.digitalocean.2 # DigitalOcean Personal Access Token

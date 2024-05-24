@@ -3,13 +3,13 @@ use tracing::debug;
 
 use super::{Auth, Client, Error, Result};
 
-
 // -------------------------------------------------------------------------------------------------
 // ClientBuilder
 // -------------------------------------------------------------------------------------------------
 pub struct ClientBuilder {
     base_url: reqwest::Url,
     auth: Auth,
+    ignore_certs: bool,
 }
 
 impl ClientBuilder {
@@ -21,6 +21,7 @@ impl ClientBuilder {
         ClientBuilder {
             base_url: Url::parse("https://api.github.com").expect("default base URL should parse"),
             auth: Auth::Unauthenticated,
+            ignore_certs: false,
         }
     }
 
@@ -33,6 +34,12 @@ impl ClientBuilder {
     /// Use the given authentication mechanism.
     pub fn auth(mut self, auth: Auth) -> Self {
         self.auth = auth;
+        self
+    }
+
+    /// Ignore validation of TLS certs.
+    pub fn ignore_certs(mut self, ignore_certs: bool) -> Self {
+        self.ignore_certs = ignore_certs;
         self
     }
 
@@ -51,7 +58,9 @@ impl ClientBuilder {
                 return Err(Error::InvalidTokenEnvVar(env_var_name.to_string()));
             }
             Ok(val) => {
-                debug!("Using GitHub personal access token from {env_var_name} environment variable");
+                debug!(
+                    "Using GitHub personal access token from {env_var_name} environment variable"
+                );
                 self.auth = Auth::PersonalAccessToken(secrecy::SecretString::from(val));
             }
         }
@@ -62,6 +71,7 @@ impl ClientBuilder {
     pub fn build(self) -> Result<Client> {
         let inner = reqwest::ClientBuilder::new()
             .user_agent(Self::USER_AGENT)
+            .danger_accept_invalid_certs(self.ignore_certs)
             .build()?;
         Ok(Client {
             base_url: self.base_url,

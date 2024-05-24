@@ -31,49 +31,74 @@ libmagic = ["content-guesser/libmagic"]
 # Compile out `trace`-level log and tracing messages in release builds
 disable_trace = ["log/release_max_level_debug", "tracing/release_max_level_debug"]
 
+# Specialize the build of Vectorscan for the microarchitecture of the build system's CPU.
+# This will result in binary that is not portable to other CPUs.
+vectorscan_cpu_native = ["vectorscan-rs/cpu_native"]
+
+# Specialize the build of Vectorscan to use available SIMD instructions on the build system's CPU.
+# This will result in binary that is not portable to other CPUs.
+vectorscan_simd_specialization = ["vectorscan-rs/simd_specialization"]
+
+# Enable all Vectorscan features that can improve speed but break binary portability.
+vectorscan_fast_nonportable = ["vectorscan_cpu_native", "vectorscan_simd_specialization"]
+
+mimalloc = ["dep:mimalloc", "dep:libmimalloc-sys"]
+
+color_backtrace = ["dep:color-backtrace"]
+
 # Enable features that are desirable in a release build
-release = ["disable_trace"]
+release = ["disable_trace", "mimalloc"]
+
+default = ["mimalloc", "color_backtrace"]
 
 
 [build-dependencies]
 # Used for embedding compile-time version information into the `noseyparker` CLI
-vergen = { version = "8.1", features = ["build", "cargo", "git", "gitcl", "rustc", "si"] }
+vergen = { version = "8.3", features = ["build", "cargo", "git", "gitcl", "rustc", "si"] }
 
 [dependencies]
 
-# anyhow = { version = "1.0", features = ["backtrace"] }   # add backtraces to errors -- not sure how expensive this is
 anyhow = { version = "1.0" }
 bstr = { version = "1.0" }
 clap = { version = "4.3", features = ["cargo", "derive", "env", "unicode", "wrap_help"] }
 clap_complete = "4.4"
+clap_mangen = "0.2"
+color-backtrace = { version = "0.6", optional = true }
 console = "0.15"
 content-guesser = { path = "../content-guesser" }
 crossbeam-channel = "0.5"
+flate2 = "1.0"
 indenter = "0.3"
 indicatif = { version = "0.17", features = ["improved_unicode"] }
 indoc = "2.0"
 input-enumerator = { path = "../input-enumerator" }
 lazy_static = "1.4"
+libmimalloc-sys = { version = "=0.1.35", optional = true }
 log = { version = "0.4", optional = true }
-mimalloc = "0.1"
+mimalloc = { version = "=0.1.39", optional = true }
 mime = "0.3"
 noseyparker = { path = "../noseyparker" }
+noseyparker-digest = { path = "../noseyparker-digest" }
 noseyparker-rules = { path = "../noseyparker-rules" }
 prettytable-rs = "0.10"
 progress = { path = "../progress" }
 rayon = "1.5"
 regex = "1.7"
 rlimit = "0.10.0"
+schemars = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde-sarif = "0.4"
-strum = { version = "0.25", features = ["derive"] }
+strum = { version = "0.26", features = ["derive"] }
+sysinfo = { version =  "0.30" }
+tar = "0.4"
+tempfile = "3.1"
 time = "0.3"
 tracing = "0.1"
 tracing-log = "0.2"
 tracing-subscriber = { version = "0.3", features = ["tracing-log", "ansi", "env-filter", "smallvec", "fmt"], default_features = false }
 url = "2.3"
-vectorscan = { path = "../vectorscan" }
+vectorscan-rs = { version = "0.0.2" }
 
 [dev-dependencies]
 assert_cmd = { version = "2.0", features = ["color-auto"] }

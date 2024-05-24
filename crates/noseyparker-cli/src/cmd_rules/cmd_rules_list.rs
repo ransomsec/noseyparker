@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use noseyparker_rules::{Rule, Ruleset};
+use noseyparker_rules::{Rule, RuleSyntax, RulesetSyntax};
 use serde::Serialize;
 use tracing::debug_span;
 
@@ -40,18 +40,10 @@ impl Reportable for RulesReporter {
 
 impl RulesReporter {
     fn get_entries(&self) -> Entries<'_> {
-        let mut rules: Vec<_> = self
-            .loaded
-            .iter_rules()
-            .map(RuleEntry::new)
-            .collect();
+        let mut rules: Vec<_> = self.loaded.iter_rules().map(RuleEntry::new).collect();
         rules.sort_by(|r1, r2| r1.id.cmp(r2.id));
 
-        let mut rulesets: Vec<_> = self
-            .loaded
-            .iter_rulesets()
-            .map(RulesetEntry::new)
-            .collect();
+        let mut rulesets: Vec<_> = self.loaded.iter_rulesets().map(RulesetEntry::new).collect();
         rulesets.sort_by(|r1, r2| r1.id.cmp(r2.id));
 
         Entries { rules, rulesets }
@@ -87,14 +79,18 @@ struct Entries<'r> {
 #[derive(Serialize)]
 struct RuleEntry<'r> {
     id: &'r str,
+    structural_id: &'r str,
     name: &'r str,
+    syntax: &'r RuleSyntax,
 }
 
 impl<'r> RuleEntry<'r> {
     pub fn new(rule: &'r Rule) -> Self {
         Self {
-            id: &rule.id,
-            name: &rule.name,
+            id: rule.id(),
+            name: rule.name(),
+            structural_id: rule.structural_id(),
+            syntax: rule.syntax(),
         }
     }
 }
@@ -107,7 +103,7 @@ struct RulesetEntry<'r> {
 }
 
 impl<'r> RulesetEntry<'r> {
-    pub fn new(ruleset: &'r Ruleset) -> Self {
+    pub fn new(ruleset: &'r RulesetSyntax) -> Self {
         Self {
             id: &ruleset.id,
             name: &ruleset.name,

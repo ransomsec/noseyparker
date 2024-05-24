@@ -10,9 +10,79 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Additions
 
-- New rules have been added (thank you @gemesa!):
+- The README now includes several animated GIFs that demonstrate simple example use cases ([#154](https://github.com/praetorian-inc/noseyparker/pull/154)).
+
+- The `report` command now offers a new `--finding-status=STATUS` filtering option ([#162](https://github.com/praetorian-inc/noseyparker/pull/162)).
+  This option causes findings with an assigned status that does not match `STATUS` to be suppressed from the report.
+
+- The `report` command now offers a new `--min-score=SCORE` filtering option ([#184](https://github.com/praetorian-inc/noseyparker/pull/184)).
+  This option causes findings that have a mean score less than `SCORE` to be suppressed from the report.
+  This option is set by default with a value of 0.05.
+
+- A new `datastore export` command has been added ([#166](https://github.com/praetorian-inc/noseyparker/pull/166)).
+  This command exports the essential content from a Nosey Parker datastore as a .tgz file that can be extracted wherever it is needed.
+
+- New experimental `annotations export` and `annotations import` commands have been added ([#171](https://github.com/praetorian-inc/noseyparker/pull/171)).
+  These commands allow annotations (finding comments, match comments, and match statuses) to be converted between JSON and datastore representations.
+
+- New rules have been added:
+
+  - AWS AppSync API Key ([#176](https://github.com/praetorian-inc/noseyparker/pull/176))
+  - Databricks Personal Access Token ([#187](https://github.com/praetorian-inc/noseyparker/pull/187) from @@tobiasgyoerfi)
+  - Password Hash (Kerberos 5, etype 23, AS-REP) ([#176](https://github.com/praetorian-inc/noseyparker/pull/176))
+
+### Changes
+
+- The vendored copy of Boost included in the internal `vectorscan-sys` crate has been removed in favor of using the system-provided Boost ([#150](https://github.com/praetorian-inc/noseyparker/pull/150) from @seqre).
+  This change is only relevant to building Nosey Parker from source.
+
+- The vendored copy of the Vectorscan regular expression library included in the internal `vectorscan-sys` crate has been removed ([#151](https://github.com/praetorian-inc/noseyparker/pull/151) from @seqre).
+  Instead, a copy of the Vectorscan 5.4.11 source tarball is included in this repository, and is extracted and patched during the build phase.
+
+- SARIF reporting format is now listed as experimental.
+
+- In the `scan` and `rules` command, the command-line option to load additional rules and rulesets from files has been renamed from `--rules` to `--rules-path`.
+  The old `--rules` option is still supported as an alias, but this is deprecated and will be removed in the v0.19 release.
+
+- The `rules list` command now includes additional fields when using JSON format ([#161](https://github.com/praetorian-inc/noseyparker/pull/161)).
+
+- The `vectorscan` and `vectorscan-sys` crates have been split off into a [separate project](https://github.com/bradlarsen/vectorscan-rs) with crates published on crates.io ([#168](https://github.com/praetorian-inc/noseyparker/pull/168)).
+
+- The `scan` command is now more conservative in its default degree of parallelism ([#174](https://github.com/praetorian-inc/noseyparker/pull/174)).
+  Previously the default value was determined only by the number of available vCPUs.
+  Now the default value is additionally limited to ensure at least 4 GiB of system RAM per job.
+
+### Fixes
+
+- A rare crash when parsing malformed Git commit timestamps has been fixed by updating the `gix-date` dependency ([#185](https://github.com/praetorian-inc/noseyparker/pull/185)).
+
+- Upon `noseyparker` startup, if resource limits cannot be adjusted, instead of crashing, a warning is printed and the process attempts to continue ([#170](https://github.com/praetorian-inc/noseyparker/issues/170)).
+
+- The prepackaged releases and binaries produced by the default settings of `cargo build` should now be more portable across microarchitectures ([#175](https://github.com/praetorian-inc/noseyparker/pull/175)).
+  Previously, the builds would be tied to the microarchitecture of the build system; this would sometimes result in binaries that were not portable across machines, particularly on x86_64.
+
+- The `--ignore-certs` command-line option is now a global option and can be specified anywhere on the command line.
+
+
+## [v0.17.0](https://github.com/praetorian-inc/noseyparker/releases/v0.17.0) (2024-03-05)
+
+### Additions
+- A new `--ignore-certs` command-line option has been added to the `scan` and `github` commands.
+  This option causes TLS certificate validation to be skipped ([#125](https://github.com/praetorian-inc/noseyparker/pull/125); thank you @seqre).
+
+- The `scan` and `github` commands now support the `--all-organizations` flag.
+  When supplied along with a custom GitHub API URL, Nosey Parker will scan the provided GitHub instance for all organizations to be further enumerated for additional repositories ([#126](https://github.com/praetorian-inc/noseyparker/pull/126); thank you @seqre).
+
+- New rules have been added (thank you @gemesa):
 
   - Adafruit IO Key ([#114](https://github.com/praetorian-inc/noseyparker/pull/114))
+  - Blynk Device Access Token ([#117](https://github.com/praetorian-inc/noseyparker/pull/117))
+  - Blynk Organization Access Token (URL first) ([#117](https://github.com/praetorian-inc/noseyparker/pull/117))
+  - Blynk Organization Access Token (URL last) ([#117](https://github.com/praetorian-inc/noseyparker/pull/117))
+  - Blynk Organization Client ID (URL first) ([#117](https://github.com/praetorian-inc/noseyparker/pull/117))
+  - Blynk Organization Client ID (URL last) ([#117](https://github.com/praetorian-inc/noseyparker/pull/117))
+  - Blynk Organization Client Secret (URL first) ([#117](https://github.com/praetorian-inc/noseyparker/pull/117))
+  - Blynk Organization Client Secret (URL last) ([#117](https://github.com/praetorian-inc/noseyparker/pull/117))
   - Docker Hub Personal Access Token ([#108](https://github.com/praetorian-inc/noseyparker/pull/108))
   - Doppler CLI Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
   - Doppler Personal Token ([#111](https://github.com/praetorian-inc/noseyparker/pull/111))
@@ -30,6 +100,68 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - TrueNAS API Key (REST API) ([#110](https://github.com/praetorian-inc/noseyparker/pull/110))
   - WireGuard Private Key ([#104](https://github.com/praetorian-inc/noseyparker/pull/104))
   - WireGuard Preshared Key ([#104](https://github.com/praetorian-inc/noseyparker/pull/104))
+
+- A new `generate` command has been added, which generates various assets that are included in prebuilt releases:
+
+  - Shell completion scripts via `generate shell-completions`
+  - A JSON Schema for the `report -f json` output via `generate json-schema` ([#128](https://github.com/praetorian-inc/noseyparker/issues/128))
+  - Manpages via `generate manpages` ([#88](https://github.com/praetorian-inc/noseyparker/issues/88))
+
+### Fixes
+- Several rules have been fixed that in certain circumstances would fail to match and produce a runtime error message:
+
+  - Google API Key
+  - ODBC Connection String
+  - Sauce Token
+
+- The `netrc Credentials` rule has been modified to avoid a runtime message about an empty capture group.
+
+- The `JSON Web Token (base64url-encoded)` rule has been improved to reduce false positives.
+  Thank you @saullocarvalho for the bug report.
+
+- The prebuilt releases now include shell completion scripts for bash, fish, elvish, powershell, and zsh, instead of 5 copies of the zsh completions ([#132](https://github.com/praetorian-inc/noseyparker/pull/132); thank you @Marcool04).
+
+### Changes
+- The minimum supported Rust version has been changed from 1.70 to 1.76.
+
+- The data model and datastore have been significantly overhauled:
+
+  - The rules used during scanning are now explicitly recorded in the datastore.
+    Each rule is additionally accompanied by a content-based identifier that uniquely identifies the rule based on its pattern.
+
+  - Each match is now associated with the rule that produced it, rather than just the rule's name (which can change as rules are modified).
+
+  - Each match is now assigned a unique content-based identifier.
+
+  - Findings (i.e., groups of matches with the same capture groups, produced by the same rule) are now represented explicitly in the datastore.
+    Each finding is assigned a unique content-based identifier.
+
+  - Now, each time a rule matches, a single match object is produced.
+    Each match in the datastore is now associated with an array of capture groups.
+    Previously, a rule whose pattern had multiple capture groups would produce one match object for each group, with each one being associated with a single capture group.
+
+  - Provenance metadata for blobs is recorded in a much simpler way than before.
+    The new representation explicitly records file and git-based provenance, but also adds explicit support for _extensible_ provenance.
+    This change will make it possible in the future to have Nosey Parker scan and usefully report blobs produced by custom input data enumerators (e.g., a Python script that lists files from the Common Crawl WARC files).
+
+  - Scores are now associated with matches instead of findings.
+
+  - Comments can now be associated with both matches and findings, instead of just findings.
+
+- The JSON and JSONL report formats have changed.
+  These will stabilize in a future release ([#101](https://github.com/praetorian-inc/noseyparker/issues/101)).
+
+  - The `matching_input` field for matches has been removed and replaced with a new `groups` field, which contains an array of base64-encoded bytestrings.
+
+  - Each match now includes additional `rule_text_id`, `rule_structural_id`, and `structural_id` fields.
+
+  - The `provenance` field of each match is now slightly different.
+
+- Schema migration of older Nosey Parker datastores is no longer performed.
+  Previously, this would automatically and silently be done when opening a datastore from an older version.
+  Explicit support for datastore migration may be added back in a future release.
+
+- The `shell-completions` command has been moved from the top level to a subcommand of `generate`.
 
 
 ## [v0.16.0](https://github.com/praetorian-inc/noseyparker/releases/v0.16.0) (2023-12-06)

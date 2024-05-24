@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, info};
 
 use noseyparker::defaults::get_builtin_rules;
-use noseyparker_rules::{Rule, Rules, Ruleset};
+use noseyparker_rules::{Rule, Rules, RulesetSyntax};
 
 use crate::args::RuleSpecifierArgs;
 use crate::util::Counted;
@@ -24,6 +24,11 @@ impl RuleLoader {
             additional_load_paths: Vec::new(),
             enabled_ruleset_ids: Vec::new(),
         }
+    }
+
+    pub fn load_builtins(mut self, load_builtins: bool) -> Self {
+        self.load_builtins = load_builtins;
+        self
     }
 
     /// Add additional file or directory paths to load rules and rulesets from.
@@ -68,10 +73,12 @@ impl RuleLoader {
         rules.sort_by(|r1, r2| r1.id.cmp(&r2.id));
         rulesets.sort_by(|r1, r2| r1.id.cmp(&r2.id));
 
-        let id_to_rule: HashMap<String, Rule> =
-            rules.into_iter().map(|r| (r.id.clone(), r)).collect();
+        let id_to_rule: HashMap<String, Rule> = rules
+            .into_iter()
+            .map(|r| (r.id.clone(), Rule::new(r)))
+            .collect();
 
-        let id_to_ruleset: HashMap<String, Ruleset> =
+        let id_to_ruleset: HashMap<String, RulesetSyntax> =
             rulesets.into_iter().map(|r| (r.id.clone(), r)).collect();
 
         Ok(LoadedRules {
@@ -83,15 +90,16 @@ impl RuleLoader {
 
     pub fn from_rule_specifiers(specs: &RuleSpecifierArgs) -> Self {
         Self::new()
-            .additional_rule_load_paths(specs.rules.as_slice())
+            .load_builtins(specs.load_builtins)
+            .additional_rule_load_paths(specs.rules_path.as_slice())
             .enable_ruleset_ids(specs.ruleset.iter())
     }
 }
 
-/// The result of running `RuleLoader::load`.
+/// The result of calling `RuleLoader::load`.
 pub struct LoadedRules {
     id_to_rule: HashMap<String, Rule>,
-    id_to_ruleset: HashMap<String, Ruleset>,
+    id_to_ruleset: HashMap<String, RulesetSyntax>,
 
     enabled_ruleset_ids: Vec<String>,
 }
@@ -117,7 +125,7 @@ impl LoadedRules {
     /// Get an iterator over the loaded rulesets.
     /// N.B., the rulesets are not iterated in any sorted order!
     #[inline]
-    pub fn iter_rulesets(&self) -> impl Iterator<Item = &Ruleset> {
+    pub fn iter_rulesets(&self) -> impl Iterator<Item = &RulesetSyntax> {
         self.id_to_ruleset.values()
     }
 
@@ -125,7 +133,7 @@ impl LoadedRules {
     /// requested rulesets.
     pub fn resolve_enabled_rules(&self) -> Result<Vec<&Rule>> {
         // Check that each mentioned non-special ruleset resolves
-        let mut resolved_rulesets: Vec<&Ruleset> = Vec::new();
+        let mut resolved_rulesets: Vec<&RulesetSyntax> = Vec::new();
         let mut all_ruleset_enabled = false;
 
         for id in self.enabled_ruleset_ids.iter() {
@@ -176,7 +184,7 @@ impl LoadedRules {
 
         if tracing::enabled!(tracing::Level::DEBUG) {
             for rule in rules.iter() {
-                debug!("Using rule `{}`: {}", rule.id, rule.name);
+                debug!("Using rule `{}`: {}", rule.id(), rule.name());
             }
         }
 
@@ -185,7 +193,7 @@ impl LoadedRules {
 
     /// Get the sorted, deduplicated collection of rules that are enabled according to the given
     /// ruleset.
-    pub fn resolve_ruleset_rules(&self, ruleset: &Ruleset) -> Result<Vec<&Rule>> {
+    pub fn resolve_ruleset_rules(&self, ruleset: &RulesetSyntax) -> Result<Vec<&Rule>> {
         let mut rules = Vec::new();
         for rule_id in ruleset.include_rule_ids.iter() {
             let rule = self.id_to_rule.get(rule_id).ok_or_else(|| {
@@ -202,6 +210,6 @@ impl LoadedRules {
 
 /// Deduplicate and sort a collection of rules
 fn sort_and_deduplicate_rules(rules: &mut Vec<&Rule>) {
-    rules.sort_by(|r1, r2| r1.id.cmp(&r2.id));
-    rules.dedup_by(|r1, r2| r1.id == r2.id);
+    rules.sort_by(|r1, r2| r1.id().cmp(r2.id()));
+    rules.dedup_by(|r1, r2| r1.id() == r2.id());
 }

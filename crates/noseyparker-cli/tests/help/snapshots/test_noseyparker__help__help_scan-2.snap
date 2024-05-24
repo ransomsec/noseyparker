@@ -55,7 +55,7 @@ Options:
           Print help (see a summary with '-h')
 
 Rule Selection Options:
-      --rules <PATH>
+      --rules-path <PATH>
           Load additional rules and rulesets from the specified file or directory
           
           The paths can be either files or directories. Directories are recursively walked and all
@@ -78,6 +78,12 @@ Rule Selection Options:
           --ruleset CUSTOM_ID`.
           
           [default: default]
+
+      --load-builtins <BOOL>
+          Control whether built-in rules and rulesets are loaded
+          
+          [default: true]
+          [possible values: true, false]
 
 Input Specifier Options:
   [INPUT]...
@@ -102,6 +108,14 @@ Input Specifier Options:
           Clone and scan accessible repositories belonging to the specified GitHub user
           
           This option can be repeated.
+
+      --all-github-organizations
+          Clone and scan accessible repositories from all accessible GitHub organizations
+          
+          This only works with a GitHub Enterprise Server instance. A non-default option for the
+          `--github-api-url` option must be specified.
+          
+          [aliases: all-github-orgs]
 
       --github-api-url <URL>
           Use the specified URL for GitHub API access
@@ -235,6 +249,9 @@ Global Options:
           [default: auto]
           [possible values: auto, never, always]
 
+      --ignore-certs
+          Ignore validation of TLS certificates
+
 Advanced Global Options:
       --rlimit-nofile <LIMIT>
           Set the rlimit for number of open files to LIMIT
@@ -245,7 +262,7 @@ Advanced Global Options:
           [default: 16384]
 
       --sqlite-cache-size <SIZE>
-          Set the cache size for sqlite connections to SIZE
+          Set the cache size for SQLite connections to SIZE
           
           This has the effect of setting SQLite's `pragma cache_size=SIZE`. The default value is set
           to use a maximum of 1GiB for database cache. See
@@ -260,4 +277,3 @@ Advanced Global Options:
           
           [default: true]
           [possible values: true, false]
-

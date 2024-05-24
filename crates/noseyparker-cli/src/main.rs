@@ -1,23 +1,27 @@
+#[cfg(feature = "mimalloc")]
 use mimalloc::MiMalloc;
+
+#[cfg(feature = "mimalloc")]
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
 use anyhow::{Context, Result};
-use tracing::debug;
+use tracing::{debug, warn};
 
 mod args;
+mod cmd_annotations;
 mod cmd_datastore;
+mod cmd_generate;
 mod cmd_github;
 mod cmd_report;
 mod cmd_rules;
 mod cmd_scan;
-mod cmd_shell_completions;
 mod cmd_summarize;
-mod rule_loader;
 mod reportable;
+mod rule_loader;
 mod util;
 
-use args::GlobalArgs;
+use args::{CommandLineArgs, GlobalArgs};
 
 /// Set up the logging / tracing system for the application.
 fn configure_tracing(global_args: &GlobalArgs) -> Result<()> {
@@ -84,18 +88,28 @@ fn configure_backtraces(global_args: &GlobalArgs) {
     if global_args.advanced.enable_backtraces {
         // Print a stack trace in case of panic.
         // This should have no overhead in normal execution.
-        std::env::set_var("RUST_BACKTRACE", "1");
+        let val = if cfg!(feature = "color_backtrace") {
+            "full"
+        } else {
+            "1"
+        };
+        std::env::set_var("RUST_BACKTRACE", val);
     }
+
+    #[cfg(feature = "color_backtrace")]
+    color_backtrace::install();
 }
 
-fn try_main() -> Result<()> {
-    let args = &args::CommandLineArgs::parse_args();
+fn try_main(args: &CommandLineArgs) -> Result<()> {
     let global_args = &args.global_args;
 
     configure_backtraces(global_args);
     configure_color(global_args);
     configure_tracing(global_args).context("Failed to initialize logging")?;
-    configure_rlimits(global_args).context("Failed to initialize resource limits")?;
+
+    if let Err(e) = configure_rlimits(global_args) {
+        warn!("Failed to initialize resource limits: {e}");
+    }
 
     match &args.command {
         args::Command::Datastore(args) => cmd_datastore::run(global_args, args),
@@ -104,24 +118,21 @@ fn try_main() -> Result<()> {
         args::Command::Scan(args) => cmd_scan::run(global_args, args),
         args::Command::Summarize(args) => cmd_summarize::run(global_args, args),
         args::Command::Report(args) => cmd_report::run(global_args, args),
-        args::Command::ShellCompletions(args) => cmd_shell_completions::run(global_args, args),
+        args::Command::Annotations(args) => cmd_annotations::run(global_args, args),
+        args::Command::Generate(args) => cmd_generate::run(global_args, args),
     }
 }
 
 fn main() {
-    if let Err(e) = try_main() {
-        eprintln!("Error: {e:?}");
+    let args = &CommandLineArgs::parse_args();
+    if let Err(e) = try_main(args) {
+        // Use the more verbose format that includes a backtrace when running with -vv or higher,
+        // otherwise use a more compact one-line error format.
+        if args.global_args.verbose > 1 {
+            eprintln!("Error: {e:?}");
+        } else {
+            eprintln!("Error: {e:#}");
+        }
         std::process::exit(2);
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use pretty_assertions::assert_eq;
-
-    #[test]
-    #[should_panic]
-    fn failure() {
-        assert_eq!(5, 42);
     }
 }

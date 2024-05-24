@@ -1,9 +1,9 @@
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono::{DateTime, Duration, TimeDelta, TimeZone, Utc};
 use reqwest;
 use reqwest::{header, header::HeaderValue, StatusCode, Url};
 use secrecy::ExposeSecret;
 
-use super::models::{Page, RateLimitOverview, Repository, User};
+use super::models::{OrganizationShort, Page, RateLimitOverview, Repository, User};
 use super::{Auth, ClientBuilder, Error, Result};
 
 // TODO: debug logging
@@ -59,6 +59,11 @@ impl Client {
 
     pub async fn get_org_repos(&self, orgname: &str) -> Result<Page<Repository>> {
         self.get_paginated_with_params(&["orgs", orgname, "repos"], &[MAX_PER_PAGE])
+            .await
+    }
+
+    pub async fn get_orgs(&self) -> Result<Page<OrganizationShort>> {
+        self.get_paginated_with_params(&["organizations"], &[MAX_PER_PAGE])
             .await
     }
 
@@ -194,7 +199,8 @@ mod test {
 
     #[test]
     fn url_from_path_parts_and_params_6() {
-        let res = make_url("https://api.github.com", &["praetorian-inc", "some/bogus/path/part"], &[]);
+        let res =
+            make_url("https://api.github.com", &["praetorian-inc", "some/bogus/path/part"], &[]);
         // XXX have to resort to match here because `Error` doesn't have an Eq instance
         match res {
             Err(Error::UrlSlashError(p)) if p == "some/bogus/path/part" => (),
@@ -278,7 +284,8 @@ impl Client {
         //     time at which the current rate limit window resets in UTC epoch seconds.
         if response.status() == StatusCode::FORBIDDEN {
             if let Some(retry_after) = response.headers().get("Retry-After") {
-                let wait = atoi::atoi::<i64>(retry_after.as_bytes()).map(Duration::seconds);
+                let wait =
+                    atoi::atoi::<i64>(retry_after.as_bytes()).and_then(TimeDelta::try_seconds);
                 let client_error = response.json().await?;
                 return Err(Error::RateLimited { client_error, wait });
             }

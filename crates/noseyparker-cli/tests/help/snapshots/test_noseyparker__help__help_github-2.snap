@@ -58,6 +58,9 @@ Global Options:
           [default: auto]
           [possible values: auto, never, always]
 
+      --ignore-certs
+          Ignore validation of TLS certificates
+
 Advanced Global Options:
       --rlimit-nofile <LIMIT>
           Set the rlimit for number of open files to LIMIT
@@ -68,7 +71,7 @@ Advanced Global Options:
           [default: 16384]
 
       --sqlite-cache-size <SIZE>
-          Set the cache size for sqlite connections to SIZE
+          Set the cache size for SQLite connections to SIZE
           
           This has the effect of setting SQLite's `pragma cache_size=SIZE`. The default value is set
           to use a maximum of 1GiB for database cache. See
@@ -83,4 +86,3 @@ Advanced Global Options:
           
           [default: true]
           [possible values: true, false]
-

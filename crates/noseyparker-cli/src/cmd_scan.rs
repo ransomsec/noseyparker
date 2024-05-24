@@ -1,12 +1,11 @@
 use anyhow::{bail, Context, Result};
-use bstr::ByteSlice;
 use indicatif::{HumanBytes, HumanCount, HumanDuration};
 use rayon::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::time::Instant;
-use tracing::{debug, debug_span, error, info, trace_span, trace, warn};
+use tracing::{debug, error, error_span, info, trace, warn};
 
 use crate::{args, rule_loader::RuleLoader};
 
@@ -26,17 +25,21 @@ use noseyparker::location;
 use noseyparker::match_type::Match;
 use noseyparker::matcher::{Matcher, ScanResult};
 use noseyparker::matcher_stats::MatcherStats;
-use noseyparker::provenance::{CommitKind, Provenance};
+use noseyparker::provenance::Provenance;
 use noseyparker::provenance_set::ProvenanceSet;
 use noseyparker::rules_database::RulesDatabase;
 
-
-type DatastoreMessage = (ProvenanceSet, BlobMetadata, Vec<Match>);
+type DatastoreMessage = (ProvenanceSet, BlobMetadata, Vec<(Option<f64>, Match)>);
 
 /// This command scans multiple filesystem inputs for secrets.
 /// The implementation enumerates content in parallel, scans the enumerated content in parallel,
 /// and records found matches to a SQLite database from a single dedicated thread.
 pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> {
+    args::validate_github_api_url(
+        &args.input_specifier_args.github_api_url,
+        args.input_specifier_args.all_github_organizations,
+    );
+
     debug!("Args:\n{global_args:#?}\n{args:#?}");
 
     let progress_enabled = global_args.use_progress();
@@ -56,10 +59,11 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
     // Open datastore
     // ---------------------------------------------------------------------------------------------
     init_progress.set_message("Initializing datastore...");
-    let mut datastore = Datastore::create_or_open(
-        &args.datastore,
-        global_args.advanced.sqlite_cache_size,
-    )?;
+    let mut datastore =
+        Datastore::create_or_open(&args.datastore, global_args.advanced.sqlite_cache_size)
+            .with_context(|| {
+                format!("Failed to open datastore at {}", &args.datastore.display())
+            })?;
 
     // ---------------------------------------------------------------------------------------------
     // Load rules
@@ -69,11 +73,24 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
         let loaded = RuleLoader::from_rule_specifiers(&args.rules)
             .load()
             .context("Failed to load rules")?;
-        let resolved = loaded.resolve_enabled_rules()
+        let resolved = loaded
+            .resolve_enabled_rules()
             .context("Failed to resolve rules")?;
         RulesDatabase::from_rules(resolved.into_iter().cloned().collect())
             .context("Failed to compile rules")?
     };
+
+    // ---------------------------------------------------------------------------------------------
+    // Record rules to the datastore
+    // ---------------------------------------------------------------------------------------------
+    init_progress.set_message("Recording rules...");
+    let mut record_rules = || -> Result<()> {
+        let tx = datastore.begin()?;
+        tx.record_rules(rules_db.rules())?;
+        tx.commit()?;
+        Ok(())
+    };
+    record_rules().context("Failed to record rules to the datastore")?;
 
     drop(init_progress);
 
@@ -84,6 +101,7 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
         let repo_specifiers = github::RepoSpecifiers {
             user: args.input_specifier_args.github_user.clone(),
             organization: args.input_specifier_args.github_organization.clone(),
+            all_organizations: args.input_specifier_args.all_github_organizations,
         };
         let mut repo_urls = args.input_specifier_args.git_url.clone();
         if !repo_specifiers.is_empty() {
@@ -93,9 +111,14 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
             );
             let mut num_found: u64 = 0;
             let api_url = args.input_specifier_args.github_api_url.clone();
-            for repo_string in
-                github::enumerate_repo_urls(&repo_specifiers, api_url, Some(&mut progress))
-                    .context("Failed to enumerate GitHub repositories")?
+
+            for repo_string in github::enumerate_repo_urls(
+                &repo_specifiers,
+                api_url,
+                global_args.ignore_certs,
+                Some(&mut progress),
+            )
+            .context("Failed to enumerate GitHub repositories")?
             {
                 match GitUrl::from_str(&repo_string) {
                     Ok(repo_url) => repo_urls.push(repo_url),
@@ -137,7 +160,7 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
             args::GitCloneMode::Mirror => CloneMode::Mirror,
             args::GitCloneMode::Bare => CloneMode::Bare,
         };
-        let git = Git::new();
+        let git = Git::new(global_args.ignore_certs);
 
         let mut progress =
             Progress::new_bar(repo_urls.len() as u64, "Fetching Git repos", progress_enabled);
@@ -274,10 +297,18 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
             "Found {} from {} plain {} and {} blobs from {} Git {}",
             HumanBytes(total_bytes_found),
             HumanCount(inputs.files.len() as u64),
-            if inputs.files.len() == 1 { "file" } else { "files" },
+            if inputs.files.len() == 1 {
+                "file"
+            } else {
+                "files"
+            },
             HumanCount(inputs.git_repos.iter().map(|r| r.num_blobs()).sum()),
             HumanCount(inputs.git_repos.len() as u64),
-            if inputs.git_repos.len() == 1 { "repo" } else { "repos" },
+            if inputs.git_repos.len() == 1 {
+                "repo"
+            } else {
+                "repos"
+            },
         ));
         inputs
     };
@@ -317,7 +348,8 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
     let datastore_writer_thread = std::thread::Builder::new()
         .name("datastore".to_string())
         .spawn(move || -> Result<_> {
-            let _span = debug_span!("datastore").entered();
+            let _span = error_span!("datastore", dir = datastore.root_dir().display().to_string())
+                .entered();
             let mut total_recording_time: std::time::Duration = Default::default();
 
             let mut num_matches_added: u64 = 0;
@@ -326,7 +358,6 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
             // Big idea: read until all the senders hang up; panic if recording matches fails.
             //
             // Record all messages in one big transaction to maximize throughput.
-
 
             let mut batch: Vec<DatastoreMessage> = Vec::with_capacity(BATCH_SIZE);
             let mut matches_in_batch: usize = 0;
@@ -341,7 +372,9 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
                 if batch.len() >= BATCH_SIZE || matches_in_batch >= BATCH_SIZE {
                     let t1 = std::time::Instant::now();
                     let batch_len = batch.len();
-                    let num_added = tx.record(batch.as_slice())?;
+                    let num_added = tx
+                        .record(batch.as_slice())
+                        .context("Failed to record batch")?;
                     num_matches_added += num_added;
                     batch.clear();
                     matches_in_batch = 0;
@@ -358,7 +391,9 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
                 let t1 = std::time::Instant::now();
 
                 let batch_len = batch.len();
-                let num_added = tx.record(batch.as_slice())?;
+                let num_added = tx
+                    .record(batch.as_slice())
+                    .context("Failed to record batch")?;
                 num_matches_added += num_added;
                 // batch.clear();
                 // matches_in_batch = 0;
@@ -404,7 +439,7 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
                 Ok((matcher, progress.clone()))
             },
             |state: &mut Result<_>, file_result: &FileResult| -> Result<()> {
-                let _span = trace_span!("file-scan", path = file_result.path.display().to_string())
+                let _span = error_span!("file-scan", path = file_result.path.display().to_string())
                     .entered();
 
                 let (matcher, progress) = match state {
@@ -446,7 +481,7 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
             .into_par_iter()
             .try_for_each(|git_repo_result| -> Result<()> {
                 let span =
-                    trace_span!("git-scan", path = git_repo_result.path.display().to_string());
+                    error_span!("git-scan", repo_path = git_repo_result.path.display().to_string());
                 let _span = span.enter();
 
                 let repository = match open_git_repo(&git_repo_result.path) {
@@ -507,9 +542,8 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
                                     .commit_metadata
                                     .get(&e.commit_oid)
                                     .expect("should have commit metadata");
-                                let p = Provenance::from_git_repo_and_commit_metadata(
+                                let p = Provenance::from_git_repo_with_first_commit(
                                     repo_path.clone(),
-                                    CommitKind::FirstSeen,
                                     commit_metadata.clone(),
                                     e.path.clone(),
                                 );
@@ -520,9 +554,8 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
                                             .commit_metadata
                                             .get(&e.commit_oid)
                                             .expect("should have commit metadata");
-                                        Provenance::from_git_repo_and_commit_metadata(
+                                        Provenance::from_git_repo_with_first_commit(
                                             repo_path.clone(),
-                                            CommitKind::FirstSeen,
                                             commit_metadata.clone(),
                                             e.path.clone(),
                                         )
@@ -610,7 +643,7 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
                 let rule_name = &rules_db
                     .get_rule(entry.rule_id)
                     .expect("rule index should be valid")
-                    .name;
+                    .name();
                 println!(
                     "{:>50} {:>10} {:>10.4}s",
                     rule_name,
@@ -621,7 +654,7 @@ pub fn run(global_args: &args::GlobalArgs, args: &args::ScanArgs) -> Result<()> 
         }
 
         if num_matches > 0 {
-            let matches_summary = datastore.summarize()?;
+            let matches_summary = datastore.get_summary()?;
             let matches_table = crate::cmd_summarize::summary_table(&matches_summary);
             println!();
             matches_table.print_tty(global_args.use_color(std::io::stdout()))?;
@@ -645,14 +678,7 @@ impl MetadataResult {
         blob: &Blob,
         provenance: &ProvenanceSet,
     ) -> MetadataResult {
-        let blob_path: Option<&'_ Path> = provenance.iter().find_map(|p| match p {
-            Provenance::File(e) => Some(e.path.as_path()),
-            Provenance::GitRepo(e) => match &e.commit_provenance {
-                Some(md) => md.blob_path.to_path().ok(),
-                None => None,
-            },
-        });
-
+        let blob_path: Option<&'_ Path> = provenance.iter().find_map(|p| p.blob_path());
         let input = match blob_path {
             None => content_guesser::Input::from_bytes(&blob.bytes),
             Some(blob_path) => content_guesser::Input::from_path_and_bytes(blob_path, &blob.bytes),
@@ -682,7 +708,7 @@ fn run_matcher(
     progress: &Progress,
 ) -> Result<()> {
     let blob_id = blob.id.hex();
-    let _span = trace_span!("matcher", blob_id = blob_id).entered();
+    let _span = error_span!("matcher", blob_id).entered();
 
     let (matcher, guesser) = matcher_guesser;
 
@@ -734,15 +760,15 @@ fn run_matcher(
                 let output_path = output_dir.join(&blob_id[2..]);
                 trace!("saving blob to {}", output_path.display());
                 match std::fs::create_dir(&output_dir) {
-                    Ok(()) => {},
-                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {},
+                    Ok(()) => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
                     Err(e) => {
                         bail!("Failed to create blob directory at {}: {}", output_dir.display(), e);
                     }
                 }
-                std::fs::write(&output_path, &blob.bytes).with_context(||
+                std::fs::write(&output_path, &blob.bytes).with_context(|| {
                     format!("Failed to write blob contents to {}", output_path.display())
-                )?;
+                })?;
             }
 
             if blob_metadata_recording_mode != args::BlobMetadataMode::All && matches.is_empty() {
@@ -782,7 +808,7 @@ fn run_matcher(
                     new_matches.extend(
                         matches
                             .iter()
-                            .flat_map(|m| Match::convert(&loc_mapping, m, snippet_length)),
+                            .map(|m| (None, Match::convert(&loc_mapping, m, snippet_length))),
                     );
                     new_matches
                 }

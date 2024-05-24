@@ -2,7 +2,10 @@
 //!
 //! The command-line interface is defined using `clap`.
 
-use clap::{crate_description, crate_version, ArgAction, Args, Parser, Subcommand, ValueEnum, ValueHint};
+use clap::{
+    crate_description, crate_version, ArgAction, Args, Parser, Subcommand, ValueEnum, ValueHint,
+};
+use lazy_static::lazy_static;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use strum::Display;
@@ -10,6 +13,28 @@ use url::Url;
 
 use noseyparker::git_url::GitUrl;
 
+use crate::util::get_writer_for_file_or_stdout;
+
+// -----------------------------------------------------------------------------
+// system information
+// -----------------------------------------------------------------------------
+lazy_static! {
+    /// How much RAM is installed in the system?
+    static ref RAM_GB: Option<f64> = {
+        if sysinfo::IS_SUPPORTED_SYSTEM {
+            use sysinfo::{System,RefreshKind,MemoryRefreshKind};
+            let s = System::new_with_specifics(RefreshKind::new().with_memory(MemoryRefreshKind::new().with_ram()));
+            Some(s.total_memory() as f64 / 1024.0 / 1024.0 / 1024.0)
+        } else {
+            None
+        }
+    };
+}
+
+// -----------------------------------------------------------------------------
+// utilities
+// -----------------------------------------------------------------------------
+#[rustfmt::skip]
 fn get_long_version() -> &'static str {
     concat!(
         crate_version!(),
@@ -45,7 +70,45 @@ fn get_long_version() -> &'static str {
     )
 }
 
+/// Get a filename-friendly short version string, suitable for naming a release archive
+fn get_short_version() -> &'static str {
+    concat!("v", clap::crate_version!(), "-", env!("VERGEN_CARGO_TARGET_TRIPLE"),)
+}
+
 const DEFAULT_DATASTORE: &str = "datastore.np";
+
+pub fn validate_github_api_url(github_api_url: &Url, all_github_organizations: bool) {
+    use clap::error::ErrorKind;
+    use clap::CommandFactory;
+
+    // Check that a non-default value of `--github-api-url` has been specified.
+    // This constraint is impossible to express natively using `clap` version 4.
+    if let Some(host) = github_api_url.host_str() {
+        if host == "api.github.com" && all_github_organizations {
+            let mut cmd = CommandLineArgs::command();
+            let err = cmd.error(
+                ErrorKind::MissingRequiredArgument,
+                "a non-default value for `--github-api-url` is required when using `--all-github-organizations`",
+            );
+            err.exit();
+        }
+    }
+}
+
+/// How many parallel scan jobs should be used by default?
+///
+/// This is based on the number of available vCPUs, and also takes into account the amount of
+/// memory per core.
+fn default_scan_jobs() -> usize {
+    match (std::thread::available_parallelism(), *RAM_GB) {
+        (Ok(v), Some(ram_gb)) => {
+            let n: usize = v.into();
+            n.clamp(1, (ram_gb / 4.0).floor() as usize)
+        }
+        (Ok(v), None) => v.into(),
+        (Err(_e), _) => 1,
+    }
+}
 
 // -----------------------------------------------------------------------------
 // command-line args
@@ -56,9 +119,9 @@ const DEFAULT_DATASTORE: &str = "datastore.np";
     bin_name("noseyparker"),
 
     author,   // retrieved from Cargo.toml `authors`
-    version,  // retrieved from Cargo.toml `version`
     about,    // retrieved from Cargo.toml `description`
 
+    version = get_short_version(),
     long_version = get_long_version(),
 
     // FIXME: add longer comment description (will be shown with `--help`)
@@ -93,10 +156,15 @@ impl CommandLineArgs {
                 .expect("datastore arg should be present");
             if let Some(ValueSource::DefaultValue) = sub_matches.value_source("datastore") {
                 if datastore_value.exists() {
-                    cmd.error(clap::error::ErrorKind::InvalidValue,
-                              format!("the default datastore at {} exists; \
+                    cmd.error(
+                        clap::error::ErrorKind::InvalidValue,
+                        format!(
+                            "the default datastore at {} exists; \
                                        explicitly specify the datastore if you wish to update it",
-                                      datastore_value.display())).exit();
+                            datastore_value.display()
+                        ),
+                    )
+                    .exit();
                 }
             }
         }
@@ -171,17 +239,25 @@ pub enum Command {
     #[command(display_order = 4, name = "github")]
     GitHub(GitHubArgs),
 
-    #[command(display_order = 30)]
     /// Manage datastores
+    #[command(display_order = 30)]
     Datastore(DatastoreArgs),
 
-    #[command(display_order = 30)]
-    /// Manage rules
+    /// Manage rules and rulesets
+    #[command(display_order = 30, alias = "rule")]
     Rules(RulesArgs),
 
+    /// Manage annotations (experimental)
+    ///
+    /// Annotations include assigned status (`accept` or `reject`) and freeform comments.
     #[command(display_order = 40)]
-    /// Generate shell completions
-    ShellCompletions(ShellCompletionsArgs),
+    Annotations(AnnotationsArgs),
+
+    /// Generate Nosey Parker release assets
+    ///
+    /// This command is used primarily for generation of artifacts to be included in releases.
+    #[command(display_order = 50)]
+    Generate(GenerateArgs),
 }
 
 // -----------------------------------------------------------------------------
@@ -200,7 +276,7 @@ pub struct GlobalArgs {
     ///
     /// This silences WARNING, INFO, DEBUG, and TRACE messages and disables progress bars.
     /// This overrides any provided verbosity and progress reporting options.
-    #[arg(global=true, long, short)]
+    #[arg(global = true, long, short)]
     pub quiet: bool,
 
     /// Enable or disable colored output
@@ -208,7 +284,7 @@ pub struct GlobalArgs {
     /// When this is "auto", colors are enabled for stdout and stderr when they are terminals.
     ///
     /// If the `NO_COLOR` environment variable is set, it takes precedence and is equivalent to `--color=never`.
-    #[arg(global=true, long, default_value_t=Mode::Auto, value_name="MODE")]
+    #[arg(global=true, long, default_value_t=Mode::Auto, value_name="MODE", alias="colour")]
     pub color: Mode,
 
     /// Enable or disable progress bars
@@ -216,6 +292,10 @@ pub struct GlobalArgs {
     /// When this is "auto", progress bars are enabled when stderr is a terminal.
     #[arg(global=true, long, default_value_t=Mode::Auto, value_name="MODE")]
     pub progress: Mode,
+
+    /// Ignore validation of TLS certificates
+    #[arg(global = true, long)]
+    pub ignore_certs: bool,
 
     #[command(flatten)]
     pub advanced: AdvancedArgs,
@@ -229,10 +309,16 @@ pub struct AdvancedArgs {
     ///
     /// This should not need to be changed from the default unless you run into crashes from
     /// running out of file descriptors.
-    #[arg(hide_short_help=true, global=true, long, default_value_t=16384, value_name="LIMIT")]
+    #[arg(
+        hide_short_help = true,
+        global = true,
+        long,
+        default_value_t = 16384,
+        value_name = "LIMIT"
+    )]
     pub rlimit_nofile: u64,
 
-    /// Set the cache size for sqlite connections to SIZE
+    /// Set the cache size for SQLite connections to SIZE
     ///
     /// This has the effect of setting SQLite's `pragma cache_size=SIZE`.
     /// The default value is set to use a maximum of 1GiB for database cache.
@@ -274,7 +360,7 @@ impl GlobalArgs {
 
 /// A generic auto/never/always mode value
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[strum(serialize_all="kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum Mode {
     Auto,
     Never,
@@ -298,7 +384,8 @@ pub struct GitHubArgs {
         value_name = "URL",
         value_hint = ValueHint::Url,
         default_value = "https://api.github.com/",
-        visible_alias="api-url"
+        visible_alias="api-url",
+        global = true,
     )]
     pub github_api_url: Url,
 }
@@ -326,23 +413,41 @@ pub struct GitHubReposListArgs {
 }
 
 #[derive(Args, Debug, Clone)]
+#[command(next_help_heading = "Input Specifier Options")]
 pub struct GitHubRepoSpecifiers {
     /// Select repositories belonging to the specified user
     ///
     /// This option can be repeated.
-    #[arg(long)]
+    #[arg(long, visible_alias = "github-user")]
     pub user: Vec<String>,
 
     /// Select repositories belonging to the specified organization
     ///
     /// This option can be repeated.
-    #[arg(long, visible_alias = "org")]
+    #[arg(
+        long,
+        visible_alias = "org",
+        visible_alias = "github-organization",
+        visible_alias = "github-org"
+    )]
     pub organization: Vec<String>,
+
+    /// Select repositories belonging to all organizations
+    ///
+    /// This only works with a GitHub Enterprise Server instance.
+    /// The `--github-api-url` option must be specified.
+    #[arg(
+        long,
+        visible_alias = "all-orgs",
+        visible_alias = "all-github-organizations",
+        visible_alias = "all-github-orgs"
+    )]
+    pub all_organizations: bool,
 }
 
 impl GitHubRepoSpecifiers {
     pub fn is_empty(&self) -> bool {
-        self.user.is_empty() && self.organization.is_empty()
+        self.user.is_empty() && self.organization.is_empty() && !self.all_organizations
     }
 }
 
@@ -389,7 +494,7 @@ pub struct RulesListArgs {
 // rules list output format
 // -----------------------------------------------------------------------------
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[strum(serialize_all="kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum RulesListOutputFormat {
     /// A text-based format designed for humans
     Human,
@@ -411,10 +516,14 @@ pub struct DatastoreArgs {
 pub enum DatastoreCommand {
     /// Initialize a new datastore
     Init(DatastoreInitArgs),
+
+    /// Export a datastore
+    Export(DatastoreExportArgs),
 }
 
 #[derive(Args, Debug)]
 pub struct DatastoreInitArgs {
+    /// Initialize the datastore at specified path
     #[arg(
         long,
         short,
@@ -423,15 +532,39 @@ pub struct DatastoreInitArgs {
         env("NP_DATASTORE"),
         default_value=DEFAULT_DATASTORE,
     )]
-    /// Initialize the datastore at specified path
     pub datastore: PathBuf,
 }
 
-fn get_parallelism() -> usize {
-    match std::thread::available_parallelism() {
-        Err(_e) => 1,
-        Ok(v) => v.into(),
-    }
+#[derive(Args, Debug)]
+pub struct DatastoreExportArgs {
+    /// Datastore to export
+    #[arg(
+        long,
+        short,
+        value_name = "PATH",
+        value_hint = ValueHint::DirPath,
+        env("NP_DATASTORE"),
+        default_value=DEFAULT_DATASTORE,
+    )]
+    pub datastore: PathBuf,
+
+    /// Write output to the specified path
+    #[arg(long, short, value_name = "PATH", value_hint = ValueHint::FilePath)]
+    pub output: PathBuf,
+
+    /// Write output in the specified format
+    #[arg(long, short, value_name = "FORMAT", default_value = "tgz")]
+    pub format: DatastoreExportOutputFormat,
+}
+
+// -----------------------------------------------------------------------------
+// datastore export output format
+// -----------------------------------------------------------------------------
+#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[strum(serialize_all = "kebab-case")]
+pub enum DatastoreExportOutputFormat {
+    /// gzipped tarball
+    Tgz,
 }
 
 // -----------------------------------------------------------------------------
@@ -454,9 +587,8 @@ pub struct ScanArgs {
     pub datastore: PathBuf,
 
     /// Use N parallel scanning threads
-    #[arg(long("jobs"), short('j'), value_name="N", default_value_t=get_parallelism())]
+    #[arg(long("jobs"), short('j'), value_name="N", default_value_t=default_scan_jobs())]
     pub num_jobs: usize,
-
 
     #[command(flatten)]
     pub rules: RuleSpecifierArgs,
@@ -474,7 +606,12 @@ pub struct ScanArgs {
     ///
     /// The default value typically gives between 4 and 7 lines of context before and after each
     /// match.
-    #[arg(long, value_name="BYTES", default_value_t=256, help_heading="Data Collection Options")]
+    #[arg(
+        long,
+        value_name = "BYTES",
+        default_value_t = 256,
+        help_heading = "Data Collection Options"
+    )]
     pub snippet_length: usize,
 
     /// Specify which blobs will be copied in entirety to the datastore
@@ -492,7 +629,6 @@ pub struct ScanArgs {
         help_heading="Data Collection Options",
     )]
     pub copy_blobs: CopyBlobsMode,
-
 }
 
 #[derive(Args, Debug)]
@@ -504,8 +640,10 @@ pub struct RuleSpecifierArgs {
     /// Directories are recursively walked and all discovered YAML files of rules and rulesets will be loaded.
     ///
     /// This option can be repeated.
-    #[arg(long, value_name = "PATH", value_hint = ValueHint::AnyPath)]
-    pub rules: Vec<PathBuf>,
+
+    // FIXME: remove deprecated `rules` alias in v0.19
+    #[arg(long, value_name = "PATH", value_hint = ValueHint::AnyPath, alias="rules")]
+    pub rules_path: Vec<PathBuf>,
 
     /// Enable the ruleset with the specified ID
     ///
@@ -520,11 +658,15 @@ pub struct RuleSpecifierArgs {
     /// If you want to use a custom ruleset in addition to the default ruleset, specify this option twice, e.g., `--ruleset default --ruleset CUSTOM_ID`.
     #[arg(long, value_name = "ID", default_values_t=["default".to_string()])]
     pub ruleset: Vec<String>,
+
+    /// Control whether built-in rules and rulesets are loaded.
+    #[arg(long, default_value_t=true, action=ArgAction::Set, value_name="BOOL")]
+    pub load_builtins: bool,
 }
 
 /// The mode to use for cloning a Git repository
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[strum(serialize_all="kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum GitCloneMode {
     /// Match the behavior of `git clone --bare`
     Bare,
@@ -538,17 +680,15 @@ pub enum GitCloneMode {
 
 /// The method of handling history in discovered Git repositories
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[strum(serialize_all="kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum GitHistoryMode {
     /// Scan all history
     Full,
 
     // XXX: add an option to support bounded history, such as just blobs in the repo HEAD
-
     /// Scan no history
     None,
 }
-
 
 #[derive(Args, Debug)]
 #[command(next_help_heading = "Metadata Collection Options")]
@@ -566,7 +706,7 @@ pub struct MetadataArgs {
 }
 
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[strum(serialize_all="kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum BlobMetadataMode {
     /// Record metadata for all encountered blobs
     All,
@@ -579,7 +719,7 @@ pub enum BlobMetadataMode {
 }
 
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[strum(serialize_all="kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum CopyBlobsMode {
     /// Copy all encountered blobs
     All,
@@ -592,7 +732,7 @@ pub enum CopyBlobsMode {
 }
 
 #[derive(Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[strum(serialize_all="kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum GitBlobProvenanceMode {
     /// The Git repository and set of commits and accompanying pathnames in which a blob is first
     /// seen
@@ -609,7 +749,7 @@ pub struct InputSpecifierArgs {
     #[arg(
         value_name="INPUT",
         value_hint=ValueHint::AnyPath,
-        required_unless_present_any(["github_user", "github_organization", "git_url"]),
+        required_unless_present_any(["github_user", "github_organization", "git_url", "all_github_organizations"]),
         display_order=1,
     )]
     pub path_inputs: Vec<PathBuf>,
@@ -643,6 +783,18 @@ pub struct InputSpecifierArgs {
         display_order = 20
     )]
     pub github_organization: Vec<String>,
+
+    /// Clone and scan accessible repositories from all accessible GitHub organizations
+    ///
+    /// This only works with a GitHub Enterprise Server instance.
+    /// A non-default option for the `--github-api-url` option must be specified.
+    #[arg(
+        long,
+        visible_alias = "all-github-orgs",
+        requires = "github_api_url",
+        display_order = 21
+    )]
+    pub all_github_organizations: bool,
 
     /// Use the specified URL for GitHub API access
     ///
@@ -684,7 +836,7 @@ pub struct ContentFilteringArgs {
         long("max-file-size"),
         default_value_t = 100.0,
         value_name = "MEGABYTES",
-        allow_negative_numbers=true,
+        allow_negative_numbers = true
     )]
     pub max_file_size_mb: f64,
 
@@ -749,34 +901,184 @@ pub struct ReportArgs {
     pub datastore: PathBuf,
 
     #[command(flatten)]
-    pub output_args: OutputArgs<ReportOutputFormat>,
+    pub filter_args: ReportFilterArgs,
 
+    #[command(flatten)]
+    pub output_args: OutputArgs<ReportOutputFormat>,
+}
+
+#[derive(Args, Debug)]
+#[command(next_help_heading = "Filtering Options")]
+pub struct ReportFilterArgs {
     /// Limit the number of matches per finding to at most N
     ///
     /// A negative value means "no limit".
-    #[arg(long, default_value_t = 3, value_name = "N", allow_negative_numbers=true)]
+    #[arg(
+        long,
+        default_value_t = 3,
+        value_name = "N",
+        allow_negative_numbers = true
+    )]
     pub max_matches: i64,
+
+    /// Only report findings that have a mean score of at least N.
+    ///
+    /// Scores are floating point numbers in the range [0, 1].
+    /// Use the value `0` to disable this filtering.
+    ///
+    /// Findings that do not have a score computed will be included regardless of this setting.
+    #[arg(long, default_value_t = 0.05, value_name = "SCORE")]
+    pub min_score: f64,
+
+    /// Include only findings with the assigned status
+    #[arg(long, value_name = "STATUS")]
+    pub finding_status: Option<FindingStatus>,
 }
 
+#[derive(ValueEnum, Debug, Display, Clone, Copy)]
+#[clap(rename_all = "lower")]
+#[strum(serialize_all = "lowercase")]
+pub enum FindingStatus {
+    /// Findings with `accept` matches
+    Accept,
+    /// Findings with `reject` matches
+    Reject,
+    /// Findings with both `accept` and `reject` matches
+    Mixed,
+    /// Findings without any `accept` or `reject` matches
+    Null,
+}
 
 // -----------------------------------------------------------------------------
-// `shell_completions` command
+// `annotations` command
+// -----------------------------------------------------------------------------
+#[derive(Args, Debug)]
+pub struct AnnotationsArgs {
+    #[command(subcommand)]
+    pub command: AnnotationsCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AnnotationsCommand {
+    /// Export annotations from a datastore (experimental)
+    Export(AnnotationsExportArgs),
+
+    /// Import annotations into a datastore (experimental)
+    Import(AnnotationsImportArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct AnnotationsExportArgs {
+    /// Use the specified datastore
+    #[arg(
+        long,
+        short,
+        value_name = "PATH",
+        value_hint = ValueHint::DirPath,
+        env("NP_DATASTORE"),
+        default_value=DEFAULT_DATASTORE,
+    )]
+    pub datastore: PathBuf,
+
+    /// Write annotations to the specified path
+    ///
+    /// If this argument is not provided, stdout will be used.
+    #[arg(
+        long,
+        short,
+        value_name = "PATH",
+        value_hint = ValueHint::FilePath,
+    )]
+    pub output: Option<PathBuf>,
+}
+
+#[derive(Args, Debug)]
+pub struct AnnotationsImportArgs {
+    /// Use the specified datastore
+    #[arg(
+        long,
+        short,
+        value_name = "PATH",
+        value_hint = ValueHint::DirPath,
+        env("NP_DATASTORE"),
+        default_value=DEFAULT_DATASTORE,
+    )]
+    pub datastore: PathBuf,
+
+    /// Read annotations from the specified path
+    ///
+    /// If this argument is not provided, stdin will be used.
+    #[arg(
+        long,
+        short,
+        value_name = "PATH",
+        value_hint = ValueHint::FilePath,
+    )]
+    pub input: Option<PathBuf>,
+}
+
+// -----------------------------------------------------------------------------
+// `generate` command
+// -----------------------------------------------------------------------------
+#[derive(Args, Debug)]
+pub struct GenerateArgs {
+    #[command(subcommand)]
+    pub command: GenerateCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum GenerateCommand {
+    /// Generate man pages
+    #[command(name = "manpages")]
+    ManPages(ManPagesArgs),
+
+    /// Generate the JSON schema for the output of the `report` command
+    JsonSchema(JsonSchemaArgs),
+
+    /// Generate shell completions
+    ShellCompletions(ShellCompletionsArgs),
+}
+
+// -----------------------------------------------------------------------------
+// `generate shell-completions` command
 // -----------------------------------------------------------------------------
 #[derive(ValueEnum, Debug, Display, Clone)]
 #[clap(rename_all = "lower")]
-#[strum(serialize_all="lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum ShellFormat {
     Bash,
     Zsh,
     Fish,
     PowerShell,
-    Elvish
+    Elvish,
 }
 
 #[derive(Args, Debug)]
 pub struct ShellCompletionsArgs {
     #[arg(long, short, value_name = "SHELL")]
     pub shell: ShellFormat,
+}
+
+// -----------------------------------------------------------------------------
+// `generate json-schema` command
+// -----------------------------------------------------------------------------
+#[derive(Args, Debug)]
+pub struct JsonSchemaArgs {
+    /// Write output to the specified path
+    ///
+    /// If this argument is not provided, stdout will be used.
+    #[arg(long, short, value_name = "PATH", value_hint = ValueHint::FilePath)]
+    pub output: Option<PathBuf>,
+}
+
+// -----------------------------------------------------------------------------
+// `generate manpages` command
+// -----------------------------------------------------------------------------
+#[derive(Args, Debug)]
+pub struct ManPagesArgs {
+    /// Write output to the specified directory
+    #[arg(long, short, value_name = "PATH", value_hint = ValueHint::DirPath, default_value="manpages")]
+    pub output: PathBuf,
 }
 
 // -----------------------------------------------------------------------------
@@ -793,23 +1095,14 @@ pub struct OutputArgs<Format: ValueEnum + Send + Sync + 'static> {
 
     /// Write output in the specified format
     // FIXME: make this optional, and if not specified, infer from the extension of the output file
-    #[arg(long, short, value_name="FORMAT", default_value="human")]
+    #[arg(long, short, value_name = "FORMAT", default_value = "human")]
     pub format: Format,
 }
 
-impl <Format: ValueEnum + Send + Sync> OutputArgs<Format> {
+impl<Format: ValueEnum + Send + Sync> OutputArgs<Format> {
     /// Get a writer for the specified output destination.
     pub fn get_writer(&self) -> std::io::Result<Box<dyn std::io::Write>> {
-        use std::fs::File;
-        use std::io::BufWriter;
-
-        match &self.output {
-            None => Ok(Box::new(BufWriter::new(std::io::stdout()))),
-            Some(p) => {
-                let f = File::create(p)?;
-                Ok(Box::new(BufWriter::new(f)))
-            }
-        }
+        get_writer_for_file_or_stdout(self.output.as_ref())
     }
 }
 
@@ -817,7 +1110,7 @@ impl <Format: ValueEnum + Send + Sync> OutputArgs<Format> {
 // report output format
 // -----------------------------------------------------------------------------
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[strum(serialize_all="kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum ReportOutputFormat {
     /// A text-based format designed for humans
     Human,
@@ -830,10 +1123,13 @@ pub enum ReportOutputFormat {
     /// This is a sequence of JSON objects, one per line.
     Jsonl,
 
-    /// SARIF format
+    /// SARIF format (experimental)
     ///
     /// This is the Static Analysis Results Interchange Format, a standardized JSON-based format used by many tools.
     /// See the spec at <https://docs.oasis-open.org/sarif/sarif/v2.1.0/cs01/sarif-v2.1.0-cs01.html>.
+    ///
+    /// Support for SARIF output is experimental.
+    /// If you run into problems when using this, please create an issue in the GitHub project: <https://github.com/praetorian-inc/noseyparker>.
     Sarif,
 }
 
@@ -841,7 +1137,7 @@ pub enum ReportOutputFormat {
 // summarize output format
 // -----------------------------------------------------------------------------
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[strum(serialize_all="kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum SummarizeOutputFormat {
     /// A text-based format designed for humans
     Human,
@@ -859,7 +1155,7 @@ pub enum SummarizeOutputFormat {
 // github output format
 // -----------------------------------------------------------------------------
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-#[strum(serialize_all="kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum GitHubOutputFormat {
     /// A text-based format designed for humans
     Human,

@@ -4,7 +4,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.76"
 
 license = "Apache-2.0"
 authors = ["Brad Larsen <bradford.larsen@praetorian.com>"]
@@ -12,7 +12,7 @@ authors = ["Brad Larsen <bradford.larsen@praetorian.com>"]
 homepage = "https://github.com/praetorian-inc/noseyparker"
 repository = "https://github.com/praetorian-inc/noseyparker"
 
-version = "0.16.0"
+version = "0.18.0-dev"
 
 publish = false
 
@@ -35,10 +35,10 @@ opt-level = 3
 [profile.dev.package.similar]
 opt-level = 3
 
-# `vectorscan` and `vectorscan-sys` benefit from being build in release mode,
+# `vectorscan-rs` and `vectorscan-rs-sys` benefit from being build in release mode,
 # even as a dev dependency: doing so saves about 6 seconds on each integration
 # test case!
-[profile.dev.package.vectorscan]
+[profile.dev.package.vectorscan-rs]
 opt-level = 3
-[profile.dev.package.vectorscan-sys]
+[profile.dev.package.vectorscan-rs-sys]
 opt-level = 3
